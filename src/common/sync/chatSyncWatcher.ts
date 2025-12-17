@@ -43,6 +43,7 @@ export interface ChatSyncWatcherOptions {
    * Debug logging toggle.
    */
   debug?: boolean;
+  traceSkips?: boolean;
 }
 
 type TimerHandle = ReturnType<typeof setTimeout>;
@@ -53,27 +54,28 @@ type PendingIntent = {
   firstQueuedAt: number;
 };
 
-let singletonStop: (() => void) | null = null;
 
 /**
  * Start a single global watcher.
  * Safe to call multiple times: it will only start once and return the same stop function.
  */
 export function startChatSyncWatcher(options: ChatSyncWatcherOptions = {}): () => void {
-  if (singletonStop) return singletonStop;
-
   const {
     debounceMs = 900,
     maxWaitMs = 5000,
-    debug = true,
+    debug = false,
+    traceSkips = false,
     onUpsert = async (c: SyncConversation) => {
-      // Default behavior for prototype: log to console.
-      console.log(
-        `[sync] would upsert conversation id=${c.id} messages=${c.messages?.length ?? 0} updated=${c.updated}`,
-      );
+      // // Default behavior for prototype: log to console.
+      // console.log(
+      //   `[sync] would upsert conversation id=${c.id} messages=${c.messages?.length ?? 0} updated=${c.updated}`
+      // );
     },
     onDelete = async (conversationId: DConversationId) => {
-      console.log(`[sync] would delete conversation id=${conversationId}`);
+      // // Default behavior for prototype: log to console.
+      // console.log(
+      //   `[sync] would delete conversation id=${conversationId}`
+      // );
     },
   } = options;
 
@@ -91,6 +93,10 @@ export function startChatSyncWatcher(options: ChatSyncWatcherOptions = {}): () =
 
   function log(...args: any[]) {
     if (debug) console.log(...args);
+  }
+
+  function trace(...args: any[]) {
+    if (traceSkips) console.log(...args);
   }
 
   /**
@@ -166,7 +172,7 @@ if (!conversation) {
 }
 
     if (!isSyncEligible(conversation)) {
-      log(`[sync] skip upsert (not eligible) id=${conversationId}`);
+      trace(`[sync] skip upsert (not eligible) id=${conversationId}`);
       return;
     }
 
@@ -240,7 +246,7 @@ if (!conversation) {
       // Do not sync deletes for conversations that were never sync-eligible
       // (incognito, placeholder empty).
       if (!isSyncEligible(prevConv)) {
-        log(`[sync] skip delete (not eligible) id=${prevId}`);
+        trace(`[sync] skip delete (not eligible) id=${prevId}`);
         continue;
       }
 
@@ -257,7 +263,7 @@ if (!conversation) {
           log(`[sync] detected new conversation id=${id}`);
           queueUpsert(nextConv);
         } else {
-          log(`[sync] skip new conversation (placeholder/incognito) id=${id}`);
+          trace(`[sync] skip new conversation (placeholder/incognito) id=${id}`);
         }
         continue;
       }
@@ -280,7 +286,7 @@ if (!conversation) {
         } else {
           // Not eligible now and wasn't eligible before: ignore.
           // Example: default placeholder empties churn.
-          log(`[sync] skip update (still not eligible) id=${id}`);
+          trace(`[sync] skip update (still not eligible) id=${id}`);
         }
       }
     }
@@ -321,7 +327,7 @@ if (!conversation) {
 
   startAfterHydration();
 
-  singletonStop = () => {
+  const stop = () => {
     log('[sync] chat watcher stopping');
 
     if (unsubscribeFromHydration) unsubscribeFromHydration();
@@ -336,9 +342,7 @@ if (!conversation) {
     }
     pending.clear();
     latestById.clear();
-
-    singletonStop = null;
   };
 
-  return singletonStop;
+  return stop;
 }

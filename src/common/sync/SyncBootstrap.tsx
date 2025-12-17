@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { startChatSyncWatcher } from './chatSyncWatcher';
+import { startChatSyncAgent } from './chatSyncAgent';
 
 /**
  * This component renders nothing.
@@ -7,12 +7,14 @@ import { startChatSyncWatcher } from './chatSyncWatcher';
  */
 export function SyncBootstrap() {
   React.useEffect(() => {
-    const stop = startChatSyncWatcher({
+    const isDev = process.env.NODE_ENV === 'development';
+    const stop = startChatSyncAgent({
       debug: true,
-      // later you'll replace onUpsert/onDelete with real API calls
+      // do not spam skip logs unless explicitly desired
+      traceSkips: false,
     });
 
-    return stop;
+    return () => stop();
   }, []);
 
   return null;
