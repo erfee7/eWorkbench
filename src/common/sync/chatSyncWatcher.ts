@@ -1,11 +1,17 @@
 import { useChatStore } from '~/common/stores/chat/store-chats';
 import type { DConversation, DConversationId } from '~/common/stores/chat/chat.conversation';
+import type { DMessage } from '~/common/stores/chat/chat.message';
 
 /**
  * This is the "sanitized" conversation shape we will sync:
  * we remove transient / local-only fields.
  */
-export type SyncConversation = Omit<DConversation, '_abortController' | '_isIncognito'>;
+export type SyncMessage = Omit<DMessage, 'tokenCount'>;
+export type SyncConversation =
+  Omit<DConversation, '_abortController' | '_isIncognito' | 'tokenCount' | 'messages'>
+  & {
+    messages: SyncMessage[];
+  };
 
 export interface ChatSyncWatcherOptions {
   /**
@@ -41,7 +47,8 @@ export interface ChatSyncWatcherOptions {
 
 type TimerHandle = ReturnType<typeof setTimeout>;
 
-type PendingEntry = {
+type PendingIntent = {
+  kind: 'upsert' | 'delete';
   timer: TimerHandle | null;
   firstQueuedAt: number;
 };
@@ -74,8 +81,9 @@ export function startChatSyncWatcher(options: ChatSyncWatcherOptions = {}): () =
   // When the debounce timer fires, we upload THIS latest version.
   const latestById = new Map<DConversationId, DConversation>();
 
-  // Track pending timers per conversation id.
-  const pending = new Map<DConversationId, PendingEntry>();
+  // Track pending intent per conversation id.
+  // If a delete and an upsert happen close together, the last one wins.
+  const pending = new Map<DConversationId, PendingIntent>();
 
   // Keep unsubscribe functions so we can stop cleanly.
   let unsubscribeFromStore: (() => void) | null = null;
@@ -85,28 +93,54 @@ export function startChatSyncWatcher(options: ChatSyncWatcherOptions = {}): () =
     if (debug) console.log(...args);
   }
 
-  function shouldSyncConversation(c: DConversation, allCount: number): boolean {
+  /**
+   * Policy:
+   * - Never sync placeholder empties (no messages, no titles), even if it's the only one.
+   * - Never sync incognito conversations.
+   *
+   * This deliberately differs from persist(partialize), which keeps one empty conversation locally
+   * for UX bootstrapping.
+   */
+  function isSyncEligible(c: DConversation): boolean {
     // Never sync incognito
     if (c._isIncognito) return false;
 
-    // Optional: mimic the persist "partialize" behavior to avoid syncing lots of empties.
-    const hasMeaningfulContent = !!c.messages?.length || !!c.userTitle || !!c.autoTitle;
+    // Never sync placeholder empties
+    const hasMessages = !!c.messages?.length;
+    const hasTitle = !!c.userTitle || !!c.autoTitle;
+    return hasMessages || hasTitle;
+  }
 
-    // If there are multiple conversations, ignore empty ones
-    if (!hasMeaningfulContent && allCount > 1) return false;
-
-    return true;
+  function sanitizeMessageForSync(m: DMessage): SyncMessage {
+    // tokenCount is a cache. Different devices may compute different values, so do not sync it.
+    // NOTE: we do not mutate the original message object.
+    const { tokenCount: _tokenCount, ...rest } = m;
+    return rest;
   }
 
   function sanitizeConversationForSync(c: DConversation): SyncConversation {
     // IMPORTANT:
     // We do NOT want to send transient fields like AbortController,
     // and we also don't want to ever sync _isIncognito.
-    const { _abortController, _isIncognito, ...rest } = c;
-    return rest;
+    //
+    // tokenCount is cache-like and depracated. 
+    // It can differ by device/tokenizer config.
+    // We omit it from the synced payload to prevent sync loop.
+    const {
+      _abortController,
+      _isIncognito,
+      tokenCount: _conversationTokenCount,
+      messages,
+      ...rest
+    } = c;
+
+    return {
+      ...rest,
+      messages: (messages || []).map(sanitizeMessageForSync),
+    };
   }
 
-  async function flushUpsert(conversationId: DConversationId) {
+  async function flushIntent(conversationId: DConversationId) {
     const entry = pending.get(conversationId);
     if (!entry) return;
 
@@ -114,12 +148,25 @@ export function startChatSyncWatcher(options: ChatSyncWatcherOptions = {}): () =
     if (entry.timer) clearTimeout(entry.timer);
     pending.delete(conversationId);
 
-    const conversation = latestById.get(conversationId);
-    if (!conversation) return;
+    if (entry.kind === 'delete') {
+      await onDelete(conversationId);
+      return;
+    }
 
-    const allCount = useChatStore.getState().conversations.length;
-    if (!shouldSyncConversation(conversation, allCount)) {
-      log(`[sync] skip upsert (filtered) id=${conversationId}`);
+    let conversation = latestById.get(conversationId);
+    // Fallback: if our cached pointer is missing, try to read from the store now.
+    // This makes flush resilient to cache clears / dev hot reload / timing edges.
+    if (!conversation) {
+      conversation = useChatStore.getState().conversations.find(c => c.id === conversationId);
+    }
+
+if (!conversation) {
+  log(`[sync] skip upsert (conversation not found) id=${conversationId}`);
+  return;
+}
+
+    if (!isSyncEligible(conversation)) {
+      log(`[sync] skip upsert (not eligible) id=${conversationId}`);
       return;
     }
 
@@ -127,20 +174,20 @@ export function startChatSyncWatcher(options: ChatSyncWatcherOptions = {}): () =
     await onUpsert(payload);
   }
 
-  function queueUpsert(conversation: DConversation) {
-    const conversationId = conversation.id;
-    latestById.set(conversationId, conversation);
-
+  function queueIntent(conversationId: DConversationId, kind: PendingIntent['kind']) {
     const now = Date.now();
     const existing = pending.get(conversationId);
 
-    if (!existing) {
-      // First time we queue this conversation in this burst
+    // If this is a new intent, or intent kind changes (upsert<->delete),
+    // reset max-wait tracking and reschedule.
+    if (!existing || existing.kind !== kind) {
+      if (existing?.timer) clearTimeout(existing.timer);
+
       const timer = setTimeout(() => {
-        void flushUpsert(conversationId);
+        void flushIntent(conversationId);
       }, debounceMs);
 
-      pending.set(conversationId, { timer, firstQueuedAt: now });
+      pending.set(conversationId, { kind, timer, firstQueuedAt: now });
       return;
     }
 
@@ -153,17 +200,29 @@ export function startChatSyncWatcher(options: ChatSyncWatcherOptions = {}): () =
 
     // If maxWait already exceeded, flush immediately.
     if (remainingMaxWait === 0) {
-      void flushUpsert(conversationId);
+      void flushIntent(conversationId);
       return;
     }
 
     // Otherwise schedule for min(debounceMs, remainingMaxWait)
     const delay = Math.min(debounceMs, remainingMaxWait);
     existing.timer = setTimeout(() => {
-      void flushUpsert(conversationId);
+      void flushIntent(conversationId);
     }, delay);
 
     pending.set(conversationId, existing);
+  }
+
+  function queueUpsert(conversation: DConversation) {
+    if (!isSyncEligible(conversation)) return;
+    latestById.set(conversation.id, conversation);
+    queueIntent(conversation.id, 'upsert');
+  }
+
+  function queueDelete(conversationId: DConversationId) {
+    // We keep latestById around in case an upsert follows quickly (user undo / retype).
+    // But if you prefer, we could latestById.delete(conversationId) here.
+    queueIntent(conversationId, 'delete');
   }
 
   function handleStoreChange(nextState: any, prevState: any) {
@@ -175,10 +234,17 @@ export function startChatSyncWatcher(options: ChatSyncWatcherOptions = {}): () =
     const prevById = new Map<DConversationId, DConversation>(prevConversations.map(c => [c.id, c]));
 
     // Detect deletions (present in prev, missing in next)
-    for (const prevId of prevById.keys()) {
-      if (!nextById.has(prevId)) {
-        void onDelete(prevId);
+    for (const [prevId, prevConv] of prevById.entries()) {
+      if (nextById.has(prevId)) continue;
+
+      // Do not sync deletes for conversations that were never sync-eligible
+      // (incognito, placeholder empty).
+      if (!isSyncEligible(prevConv)) {
+        log(`[sync] skip delete (not eligible) id=${prevId}`);
+        continue;
       }
+
+      queueDelete(prevId);
     }
 
     // Detect additions/updates
@@ -187,14 +253,35 @@ export function startChatSyncWatcher(options: ChatSyncWatcherOptions = {}): () =
 
       // New conversation
       if (!prevConv) {
-        log(`[sync] detected new conversation id=${id}`);
-        queueUpsert(nextConv);
+        if (isSyncEligible(nextConv)) {
+          log(`[sync] detected new conversation id=${id}`);
+          queueUpsert(nextConv);
+        } else {
+          log(`[sync] skip new conversation (placeholder/incognito) id=${id}`);
+        }
         continue;
       }
 
       // Changed conversation (object reference changed)
       if (prevConv !== nextConv) {
-        queueUpsert(nextConv);
+        const prevEligible = isSyncEligible(prevConv);
+        const nextEligible = isSyncEligible(nextConv);
+
+        // If it used to be sync-eligible but became a placeholder empty,
+        // treat that as a remote delete to avoid other devices keeping stale history.
+        if (prevEligible && !nextEligible) {
+          log(`[sync] conversation became placeholder empty -> delete id=${id}`);
+          queueDelete(id);
+          continue;
+        }
+
+        if (nextEligible) {
+          queueUpsert(nextConv);
+        } else {
+          // Not eligible now and wasn't eligible before: ignore.
+          // Example: default placeholder empties churn.
+          log(`[sync] skip update (still not eligible) id=${id}`);
+        }
       }
     }
   }
