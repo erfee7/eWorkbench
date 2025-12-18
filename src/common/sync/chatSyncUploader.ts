@@ -1,6 +1,6 @@
 import type { DConversationId } from '~/common/stores/chat/chat.conversation';
 import { useChatSyncStore } from '~/common/sync/store-chat-sync';
-import type { SyncConversation } from '~/common/sync/chatSyncWatcher';
+import type { SyncConversation } from '~/common/sync/chatSyncCodec';
 import type { ChatSyncTransport } from './chatSyncTransport';
 
 export interface ChatSyncUploaderOptions {
@@ -121,6 +121,7 @@ export function createChatSyncUploader(options: ChatSyncUploaderOptions) {
     const conversationId = conversation.id;
     pendingUpsertPayloadById.set(conversationId, conversation);
     useChatSyncStore.getState().markDirty(conversationId, 'upsert');
+    useChatSyncStore.getState().setError(conversationId, undefined);
 
     log(`[sync] queued upsert id=${conversationId} baseRevision=${getBaseRevision(conversationId)}`);
 
@@ -132,6 +133,7 @@ export function createChatSyncUploader(options: ChatSyncUploaderOptions) {
     // delete wins over any queued upsert payload
     pendingUpsertPayloadById.delete(conversationId);
     useChatSyncStore.getState().markDirty(conversationId, 'delete');
+    useChatSyncStore.getState().setError(conversationId, undefined);
 
     log(`[sync] queued delete id=${conversationId} baseRevision=${getBaseRevision(conversationId)}`);
 

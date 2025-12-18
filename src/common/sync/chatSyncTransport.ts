@@ -1,5 +1,5 @@
 import type { DConversationId } from '~/common/stores/chat/chat.conversation';
-import type { SyncConversation } from '~/common/sync/chatSyncWatcher'; // ok for now; can be moved to chatSync.types.ts later
+import type { SyncConversation } from '~/common/sync/chatSyncCodec';
 
 export type ChatSyncResult<T> =
   | { ok: true; value: T }

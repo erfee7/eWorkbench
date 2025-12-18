@@ -1,17 +1,12 @@
 import { useChatStore } from '~/common/stores/chat/store-chats';
 import type { DConversation, DConversationId } from '~/common/stores/chat/chat.conversation';
-import type { DMessage } from '~/common/stores/chat/chat.message';
+import type { SyncConversation } from '~/common/sync/chatSyncCodec';
+import { isConversationSyncEligible, sanitizeConversationForSync } from '~/common/sync/chatSyncCodec';
 
 /**
- * This is the "sanitized" conversation shape we will sync:
- * we remove transient / local-only fields.
- */
-export type SyncMessage = Omit<DMessage, 'tokenCount'>;
-export type SyncConversation =
-  Omit<DConversation, '_abortController' | '_isIncognito' | 'tokenCount' | 'messages'>
-  & {
-    messages: SyncMessage[];
-  };
+ * Re-export types for compatibility (other modules may import from watcher).
+*/
+export type { SyncMessage, SyncConversation } from '~/common/sync/chatSyncCodec';
 
 export interface ChatSyncWatcherOptions {
   /**
@@ -99,53 +94,6 @@ export function startChatSyncWatcher(options: ChatSyncWatcherOptions = {}): () =
     if (traceSkips) console.log(...args);
   }
 
-  /**
-   * Policy:
-   * - Never sync placeholder empties (no messages, no titles), even if it's the only one.
-   * - Never sync incognito conversations.
-   *
-   * This deliberately differs from persist(partialize), which keeps one empty conversation locally
-   * for UX bootstrapping.
-   */
-  function isSyncEligible(c: DConversation): boolean {
-    // Never sync incognito
-    if (c._isIncognito) return false;
-
-    // Never sync placeholder empties
-    const hasMessages = !!c.messages?.length;
-    const hasTitle = !!c.userTitle || !!c.autoTitle;
-    return hasMessages || hasTitle;
-  }
-
-  function sanitizeMessageForSync(m: DMessage): SyncMessage {
-    // tokenCount is a cache. Different devices may compute different values, so do not sync it.
-    // NOTE: we do not mutate the original message object.
-    const { tokenCount: _tokenCount, ...rest } = m;
-    return rest;
-  }
-
-  function sanitizeConversationForSync(c: DConversation): SyncConversation {
-    // IMPORTANT:
-    // We do NOT want to send transient fields like AbortController,
-    // and we also don't want to ever sync _isIncognito.
-    //
-    // tokenCount is cache-like and depracated. 
-    // It can differ by device/tokenizer config.
-    // We omit it from the synced payload to prevent sync loop.
-    const {
-      _abortController,
-      _isIncognito,
-      tokenCount: _conversationTokenCount,
-      messages,
-      ...rest
-    } = c;
-
-    return {
-      ...rest,
-      messages: (messages || []).map(sanitizeMessageForSync),
-    };
-  }
-
   async function flushIntent(conversationId: DConversationId) {
     const entry = pending.get(conversationId);
     if (!entry) return;
@@ -171,7 +119,7 @@ if (!conversation) {
   return;
 }
 
-    if (!isSyncEligible(conversation)) {
+    if (!isConversationSyncEligible(conversation)) {
       trace(`[sync] skip upsert (not eligible) id=${conversationId}`);
       return;
     }
@@ -220,7 +168,7 @@ if (!conversation) {
   }
 
   function queueUpsert(conversation: DConversation) {
-    if (!isSyncEligible(conversation)) return;
+    if (!isConversationSyncEligible(conversation)) return;
     latestById.set(conversation.id, conversation);
     queueIntent(conversation.id, 'upsert');
   }
@@ -245,7 +193,7 @@ if (!conversation) {
 
       // Do not sync deletes for conversations that were never sync-eligible
       // (incognito, placeholder empty).
-      if (!isSyncEligible(prevConv)) {
+      if (!isConversationSyncEligible(prevConv)) {
         trace(`[sync] skip delete (not eligible) id=${prevId}`);
         continue;
       }
@@ -259,7 +207,7 @@ if (!conversation) {
 
       // New conversation
       if (!prevConv) {
-        if (isSyncEligible(nextConv)) {
+        if (isConversationSyncEligible(nextConv)) {
           log(`[sync] detected new conversation id=${id}`);
           queueUpsert(nextConv);
         } else {
@@ -270,8 +218,8 @@ if (!conversation) {
 
       // Changed conversation (object reference changed)
       if (prevConv !== nextConv) {
-        const prevEligible = isSyncEligible(prevConv);
-        const nextEligible = isSyncEligible(nextConv);
+        const prevEligible = isConversationSyncEligible(prevConv);
+        const nextEligible = isConversationSyncEligible(nextConv);
 
         // If it used to be sync-eligible but became a placeholder empty,
         // treat that as a remote delete to avoid other devices keeping stale history.
