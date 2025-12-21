@@ -1,14 +1,49 @@
-# Very simple docker-compose file to run the app on http://localhost:3000 (or http://127.0.0.1:3000).
-#
-# For more examples, such running big-AGI alongside a web browsing service, see the `docs/docker` folder.
-
-version: '3.9'
-
 services:
-  big-agi:
-    image: ghcr.io/enricoros/big-agi:latest
+  web:
+    image: big-agi-sync
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: big-agi-web
     ports:
       - "3000:3000"
-    env_file:
-      - .env
-    command: [ "next", "start", "-p", "3000" ]
+    environment:
+      # Next.js in containers sometimes needs explicit host binding
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+
+      # Present already so you don't have to rewire compose later.
+      # Not used yet (since no server endpoints exist), but harmless.
+      - SYNC_DATABASE_URL=postgresql://syncuser:syncpwd@sync-db:5432/syncdb?sslmode=disable
+      - SYNC_TOKEN=dev-sync-token
+
+    depends_on:
+      sync-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  sync-db:
+    image: postgres:16-alpine
+    container_name: big-agi-sync-db
+    environment:
+      - POSTGRES_DB=syncdb
+      - POSTGRES_USER=syncuser
+      - POSTGRES_PASSWORD=syncpwd
+    # ports:
+    #   # Optional: expose to host for debugging with a local DB tool
+    #   - "5432:5432"
+    volumes:
+      - sync-db-data:/var/lib/postgresql/data
+      # Optional init scripts folder (safe to keep even empty)
+      - ./docker/sync-db/init:/docker-entrypoint-initdb.d:ro,Z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U syncuser -d syncdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  sync-db-data:
