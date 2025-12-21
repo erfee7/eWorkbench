@@ -1,3 +1,5 @@
+// src/common/sync/chatSyncCodec.ts
+
 import type { DConversation } from '~/common/stores/chat/chat.conversation';
 import type { DMessage } from '~/common/stores/chat/chat.message';
 

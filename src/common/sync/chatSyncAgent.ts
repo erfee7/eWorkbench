@@ -1,3 +1,5 @@
+// src/common/sync/chatSyncAgent.ts
+
 import { startChatSyncWatcher } from '~/common/sync/chatSyncWatcher';
 import { createChatSyncUploader } from '~/common/sync/chatSyncUploader';
 import { createChatSyncTransportNoop } from '~/common/sync/chatSyncTransport.noop';

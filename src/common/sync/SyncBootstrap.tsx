@@ -1,3 +1,5 @@
+// src/common/sync/SyncBootstrap.tsx
+
 import * as React from 'react';
 import { startChatSyncAgent } from './chatSyncAgent';
 

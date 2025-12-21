@@ -1,3 +1,5 @@
+// src/common/sync/chatSyncUploader.ts
+
 import type { DConversationId } from '~/common/stores/chat/chat.conversation';
 import { useChatSyncStore } from '~/common/sync/store-chat-sync';
 import type { SyncConversation } from '~/common/sync/chatSyncCodec';

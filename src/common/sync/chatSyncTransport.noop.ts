@@ -1,3 +1,5 @@
+// src/common/sync/chatSyncTransport.noop.ts
+
 import type { ChatSyncDeleteRequest, ChatSyncDeleteResponse, ChatSyncResult, ChatSyncTransport, ChatSyncUpsertRequest, ChatSyncUpsertResponse } from './chatSyncTransport';
 
 export function createChatSyncTransportNoop(): ChatSyncTransport {

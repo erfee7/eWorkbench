@@ -15,7 +15,6 @@ services:
       - NEXT_TELEMETRY_DISABLED=1
 
       # Present already so you don't have to rewire compose later.
-      # Not used yet (since no server endpoints exist), but harmless.
       - SYNC_DATABASE_URL=postgresql://syncuser:syncpwd@sync-db:5432/syncdb?sslmode=disable
       - SYNC_TOKEN=dev-sync-token
 
