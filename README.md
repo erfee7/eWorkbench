@@ -1,5 +1,47 @@
 <div align="center">
 
+# eWorkbench
+
+A transparent, inspectable workbench for working with modern **AI** tools — built as a fork of **Big-AGI Open**.
+
+</div>
+
+## Status
+
+Early-stage fork. For now, eWorkbench tracks upstream closely while experimenting with changes that may diverge long-term.
+
+Planned ideas (not finalized): sync/accounts and additional QoL features.
+
+## Get Started
+
+At the moment, installation and configuration are the same as upstream Big-AGI Open.
+
+- Upstream installation guide: https://github.com/enricoros/big-agi/blob/main/docs/installation.md
+
+## Attribution
+
+eWorkbench is a fork of:
+
+**Big-AGI Open** — https://github.com/enricoros/big-agi  
+Created and maintained by **Enrico Ros** and contributors. Licensed under **MIT**.
+
+This fork is not affiliated with the upstream project.
+
+## License
+
+MIT License · [Third-Party Notices](src/modules/3rdparty/THIRD_PARTY_NOTICES.md) (same as upstream)
+
+---
+
+# Upstream README (Big-AGI Open)
+
+<details>
+<summary>Click to expand</summary>
+
+<!-- Full upstream README below this line, unmodified. -->
+
+<div align="center">
+
 <img width="256" height="256" alt="Big-AGI Logo" src="https://big-agi.com/assets/logo-bright-github.svg" />
 
 <h1><a href="https://big-agi.com">Big-AGI</a></h1>
@@ -389,3 +431,7 @@ When you open an issue, our custom AI triage system (powered by [Claude Code](ht
 MIT License · [Third-Party Notices](src/modules/3rdparty/THIRD_PARTY_NOTICES.md)
 
 **2023-2025** · Enrico Ros × [Big-AGI](https://big-agi.com)
+
+
+</details>
+
