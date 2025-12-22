@@ -25,6 +25,8 @@ eWorkbench is a fork of:
 **Big-AGI Open** — https://github.com/enricoros/big-agi  
 Created and maintained by **Enrico Ros** and contributors. Licensed under **MIT**.
 
+The **Sponsor** button in this repository points to the upstream Big-AGI project to support ongoing upstream development.
+
 This fork is not affiliated with the upstream project.
 
 ## License
