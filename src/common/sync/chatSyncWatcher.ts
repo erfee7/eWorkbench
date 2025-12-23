@@ -37,6 +37,12 @@ export interface ChatSyncWatcherOptions {
   onDelete?: (conversationId: DConversationId) => void | Promise<void>;
 
   /**
+   * If true for an id, the watcher will ignore changes for that conversation.
+   * This is how we apply remote pulls (startup pull and later SSE pulls) without creating an "upload loop".
+   */
+  isMuted?: (conversationId: DConversationId) => boolean;
+
+  /**
    * Debug logging toggle.
    */
   debug?: boolean;
@@ -74,6 +80,7 @@ export function startChatSyncWatcher(options: ChatSyncWatcherOptions = {}): () =
       //   `[sync] would delete conversation id=${conversationId}`
       // );
     },
+    isMuted = () => false,
   } = options;
 
   // Track the latest conversation object we have seen for each id.
@@ -170,14 +177,20 @@ if (!conversation) {
   }
 
   function queueUpsert(conversation: DConversation) {
+    if (isMuted(conversation.id)) {
+      trace(`[sync] skip upsert (muted) id=${conversation.id}`);
+      return;
+    }
     if (!isConversationSyncEligible(conversation)) return;
     latestById.set(conversation.id, conversation);
     queueIntent(conversation.id, 'upsert');
   }
 
   function queueDelete(conversationId: DConversationId) {
-    // We keep latestById around in case an upsert follows quickly (user undo / retype).
-    // But if you prefer, we could latestById.delete(conversationId) here.
+    if (isMuted(conversationId)) {
+      trace(`[sync] skip delete (muted) id=${conversationId}`);
+      return;
+    }
     queueIntent(conversationId, 'delete');
   }
 
@@ -193,8 +206,12 @@ if (!conversation) {
     for (const [prevId, prevConv] of prevById.entries()) {
       if (nextById.has(prevId)) continue;
 
+      if (isMuted(prevId)) {
+        trace(`[sync] skip delete (muted) id=${prevId}`);
+        continue;
+      }
+
       // Do not sync deletes for conversations that were never sync-eligible
-      // (incognito, placeholder empty).
       if (!isConversationSyncEligible(prevConv)) {
         trace(`[sync] skip delete (not eligible) id=${prevId}`);
         continue;
@@ -205,6 +222,11 @@ if (!conversation) {
 
     // Detect additions/updates
     for (const [id, nextConv] of nextById.entries()) {
+      if (isMuted(id)) {
+        trace(`[sync] skip change (muted) id=${id}`);
+        continue;
+      }
+
       const prevConv = prevById.get(id);
 
       // New conversation

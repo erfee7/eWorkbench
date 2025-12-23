@@ -1,17 +1,31 @@
 // src/common/sync/chatSyncTransport.noop.ts
 
-import type { ChatSyncDeleteRequest, ChatSyncDeleteResponse, ChatSyncResult, ChatSyncTransport, ChatSyncUpsertRequest, ChatSyncUpsertResponse } from './chatSyncTransport';
+import type { DConversationId } from '~/common/stores/chat/chat.conversation';
+import type {
+  ChatSyncDeleteRequest,
+  ChatSyncDeleteResponse,
+  ChatSyncGetConversationResponse,
+  ChatSyncListConversationsResponse,
+  ChatSyncResult,
+  ChatSyncTransport,
+  ChatSyncUpsertRequest,
+  ChatSyncUpsertResponse,
+} from '~/common/sync/chatSyncTransport';
 
 export function createChatSyncTransportNoop(): ChatSyncTransport {
+  const disabled = <T,>(what: string): ChatSyncResult<T> => ({
+    ok: false,
+    error: `sync disabled (${what})`,
+    retryable: false,
+  });
+
   return {
     mode: 'disabled',
 
-    async upsertConversation(_req: ChatSyncUpsertRequest): Promise<ChatSyncResult<ChatSyncUpsertResponse>> {
-      return { ok: false, error: 'sync transport disabled', retryable: true };
-    },
+    upsertConversation: async (_req: ChatSyncUpsertRequest) => disabled<ChatSyncUpsertResponse>('upsertConversation'),
+    deleteConversation: async (_req: ChatSyncDeleteRequest) => disabled<ChatSyncDeleteResponse>('deleteConversation'),
 
-    async deleteConversation(_req: ChatSyncDeleteRequest): Promise<ChatSyncResult<ChatSyncDeleteResponse>> {
-      return { ok: false, error: 'sync transport disabled', retryable: true };
-    },
+    listConversations: async () => disabled<ChatSyncListConversationsResponse>('listConversations'),
+    getConversation: async (_conversationId: DConversationId) => disabled<ChatSyncGetConversationResponse>('getConversation'),
   };
 }
