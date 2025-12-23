@@ -4,19 +4,27 @@ import type { DConversationId } from '~/common/stores/chat/chat.conversation';
 import { useChatSyncStore } from '~/common/sync/store-chat-sync';
 import type { SyncConversation } from '~/common/sync/chatSyncCodec';
 import type { ChatSyncTransport } from './chatSyncTransport';
+import type { ChatSyncConflictEvent } from '~/common/sync/chatSyncConflictResolver';
 
 export interface ChatSyncUploaderOptions {
   transport: ChatSyncTransport;
   debug?: boolean;
+
+  /**
+   * Called when the server returns a 409 conflict.
+   * The resolver is responsible for:
+   * - fetching remote state
+   * - updating local store under mute
+   * - updating sync metadata (remoteRevisionById/dirtyOpById)
+   */
+  onConflict?: (event: ChatSyncConflictEvent) => Promise<void> | void;
 }
 
 /**
  * Queue + revision-aware uploader.
- * - It is "fully ready" to upload (computes baseRevision, tracks dirty ops, handles in-flight),
- *   but with a NOOP transport it won't actually send.
  */
 export function createChatSyncUploader(options: ChatSyncUploaderOptions) {
-  const { transport, debug = false } = options;
+  const { transport, debug = false, onConflict } = options;
 
   const pendingUpsertPayloadById = new Map<DConversationId, SyncConversation>();
 
@@ -65,9 +73,7 @@ export function createChatSyncUploader(options: ChatSyncUploaderOptions) {
       if (dirtyOp === 'upsert') {
         const payload = pendingUpsertPayloadById.get(conversationId);
         if (!payload) {
-          // We know something is dirty, but we don't have the data blob.
-          // This can happen after refresh; later we'll resolve by pulling from local store.
-          // For now we just keep it dirty.
+          // Dirty but no payload blob: can happen after refresh; agent will reconcile later.
           useChatSyncStore.getState().setError(conversationId, 'missing upsert payload');
           return;
         }
@@ -79,11 +85,23 @@ export function createChatSyncUploader(options: ChatSyncUploaderOptions) {
         });
 
         if (!result.ok) {
+          // 409 conflict: delegate to resolver (agent-owned policy).
+          if (result.status === 409 && result.conflict && onConflict) {
+            await onConflict({
+              op: 'upsert',
+              conversationId,
+              baseRevision,
+              conflict: result.conflict,
+              attemptedData: payload,
+            });
+            return;
+          }
+
           useChatSyncStore.getState().setError(conversationId, result.error);
           return;
         }
 
-        // ACK (future server will supply revision)
+        // ACK
         useChatSyncStore.getState().setRemoteRevision(conversationId, result.value.revision);
         useChatSyncStore.getState().clearDirty(conversationId);
         pendingUpsertPayloadById.delete(conversationId);
@@ -97,6 +115,17 @@ export function createChatSyncUploader(options: ChatSyncUploaderOptions) {
         });
 
         if (!result.ok) {
+          // 409 conflict: delegate to resolver (agent-owned policy).
+          if (result.status === 409 && result.conflict && onConflict) {
+            await onConflict({
+              op: 'delete',
+              conversationId,
+              baseRevision,
+              conflict: result.conflict,
+            });
+            return;
+          }
+
           useChatSyncStore.getState().setError(conversationId, result.error);
           return;
         }
@@ -145,8 +174,6 @@ export function createChatSyncUploader(options: ChatSyncUploaderOptions) {
   return {
     queueUpsert,
     queueDelete,
-
-    // exposed for future UI/actions (e.g., "retry now")
     tryFlush,
   };
 }

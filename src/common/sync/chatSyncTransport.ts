@@ -3,9 +3,42 @@
 import type { DConversationId } from '~/common/stores/chat/chat.conversation';
 import type { SyncConversation } from '~/common/sync/chatSyncCodec';
 
+/**
+ * Server conflict payload (409) shape.
+ * Mirrors `SyncConflictResponse` returned by the Next.js route handler.
+ */
+export interface ChatSyncConflict {
+  error: 'conflict';
+  conversationId: DConversationId;
+  revision: number;
+  deleted: boolean;
+}
+
+/**
+ * Transport result wrapper.
+ *
+ * We keep `error: string` for human-readable logs/UI,
+ * but we also optionally carry structured details (`conflict`) for 409 handling.
+ */
 export type ChatSyncResult<T> =
   | { ok: true; value: T }
-  | { ok: false; error: string; status?: number; retryable?: boolean };
+  | {
+    ok: false;
+    error: string;
+    status?: number;
+    retryable?: boolean;
+
+    /**
+     * Parsed response body (if any).
+     * Useful for debugging / future richer error handling.
+     */
+    body?: unknown;
+
+    /**
+     * Present only when the server returned a recognized 409 conflict payload.
+     */
+    conflict?: ChatSyncConflict;
+  };
 
 /**
  * Remote metadata item (from GET /api/sync/conversations).

@@ -6,6 +6,8 @@ import { createChatSyncTransportNoop } from '~/common/sync/chatSyncTransport.noo
 import { createChatSyncTransportHttp } from '~/common/sync/chatSyncTransport.http';
 import { createChatSyncTransportSwitchable } from '~/common/sync/chatSyncTransport.switchable';
 
+import { createChatSyncConflictResolver } from '~/common/sync/chatSyncConflictResolver';
+
 import { useChatStore } from '~/common/stores/chat/store-chats';
 import { useChatSyncStore } from '~/common/sync/store-chat-sync';
 
@@ -57,7 +59,6 @@ export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => vo
 
   // ---- Switchable transport (starts disabled, later switches to HTTP) ----
   const { transport, switchTo } = createChatSyncTransportSwitchable(createChatSyncTransportNoop());
-  const uploader = createChatSyncUploader({ transport, debug });
 
   // ---- Per-conversation mute registry (reference-counted) ----
   const muteCountById = new Map<DConversationId, number>();
@@ -77,6 +78,23 @@ export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => vo
       else muteCountById.set(conversationId, next);
     }
   }
+
+  // ---- Conflict resolver (policy) ----
+  // We declare this before creating the uploader so we can wire the callback safely.
+  const conflictResolver = createChatSyncConflictResolver({
+    transport,
+    withConversationMuted,
+    inflateConversationFromSync,
+    queueUpsert: (c) => uploader.queueUpsert(c), // uses uploader declared below (safe closure)
+    debug,
+  });
+
+  // ---- Uploader (now delegates 409 to resolver) ----
+  const uploader = createChatSyncUploader({
+    transport,
+    debug,
+    onConflict: (event) => conflictResolver.handleConflict(event),
+  });
 
   let stopWatcher: (() => void) | null = null;
   let unsubscribeFromHydration: (() => void) | null = null;
@@ -149,7 +167,7 @@ export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => vo
   async function initialPullAndApplyRemote() {
     const httpTransport = createChatSyncTransportHttp();
 
-    // Snapshot what we *previously* believed the remote revisions were.
+    // Snapshot what we previously believed the remote revisions were.
     // We use this to detect "server changed since last time" without needing full blobs.
     const prevRemoteRevisionById = { ...useChatSyncStore.getState().remoteRevisionById };
 
@@ -164,8 +182,25 @@ export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => vo
     const items = listRes.value.items || [];
     log(`[sync] initial pull: got ${items.length} remote items`);
 
+    /**
+     * IMPORTANT SEMANTICS (conflict correctness):
+     *
+     * `remoteRevisionById[id]` is the revision that the client believes its LOCAL base corresponds to.
+     *
+     * If a conversation is locally dirty, we MUST NOT update `remoteRevisionById` from the server list here,
+     * otherwise we could accidentally "fast-forward" baseRevision and overwrite remote changes without a 409.
+     *
+     * By not updating it, a changed remote will naturally trigger a 409 during upload,
+     * and we will enter the conflict resolver workflow (copy local + pull remote).
+     */
+    const dirtyAtStartup = { ...useChatSyncStore.getState().dirtyOpById };
+
     // 1) Record latest remote revisions (knowledge, not a mutation of chats)
     for (const item of items) {
+      if (dirtyAtStartup[item.conversationId]) {
+        if (traceSkips) console.log(`[sync] initial pull: skip revision update (local dirty) id=${item.conversationId}`);
+        continue;
+      }
       useChatSyncStore.getState().setRemoteRevision(item.conversationId, item.revision);
     }
 
@@ -175,8 +210,8 @@ export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => vo
 
       const conversationId = item.conversationId;
 
-      // If local has pending intent for this conversation, do NOT overwrite it with remote.
-      // This prevents silent data loss (conflict path will be handled later via 409 + pull).
+      // If local has pending intent for this conversation, do NOT overwrite it with remote here.
+      // Conflicts will be resolved by 409 + resolver later.
       if (useChatSyncStore.getState().dirtyOpById[conversationId]) {
         if (traceSkips) console.log(`[sync] initial pull: skip apply (local dirty) id=${conversationId}`);
         continue;
@@ -239,14 +274,14 @@ export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => vo
       log(`[sync] initial pull: imported from server id=${conversationId} rev=${getRes.value.revision}`);
     }
 
-    // 3) Enable uploads by switching transport used by uploader
+    // 3) Enable uploads
     switchTo(httpTransport);
     log('[sync] transport switched to HTTP; uploads enabled');
 
-    // 4) Rebuild any persisted dirty upserts (payloads are not persisted) and queue them
+    // 4) Rebuild dirty upsert payloads and queue them
     reconcileDirtyUpsertsAfterHydration();
 
-    // 5) Flush any remaining dirty ops (especially deletes, which have no payload to rebuild)
+    // 5) Flush remaining dirty ops
     const dirtyNow = useChatSyncStore.getState().dirtyOpById;
     for (const conversationId of Object.keys(dirtyNow) as DConversationId[]) {
       void uploader.tryFlush(conversationId);

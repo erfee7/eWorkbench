@@ -2,6 +2,7 @@
 
 import type { DConversationId } from '~/common/stores/chat/chat.conversation';
 import type {
+  ChatSyncConflict,
   ChatSyncDeleteRequest,
   ChatSyncDeleteResponse,
   ChatSyncGetConversationResponse,
@@ -58,14 +59,29 @@ async function readJsonSafely(res: Response): Promise<any> {
   }
 }
 
+function tryParseConflict(body: any): ChatSyncConflict | undefined {
+  // Recognize the server's 409 payload:
+  // { error: 'conflict', conversationId, revision, deleted }
+  if (!body || typeof body !== 'object') return undefined;
+  if (body.error !== 'conflict') return undefined;
+
+  if (typeof body.conversationId !== 'string') return undefined;
+  if (typeof body.revision !== 'number' || !Number.isFinite(body.revision) || body.revision < 0) return undefined;
+  if (typeof body.deleted !== 'boolean') return undefined;
+
+  return {
+    error: 'conflict',
+    conversationId: body.conversationId,
+    revision: body.revision,
+    deleted: body.deleted,
+  };
+}
+
 export function createChatSyncTransportHttp(options: ChatSyncHttpTransportOptions = {}): ChatSyncTransport {
   const token = options.token ?? HARD_CODED_SYNC_TOKEN;
   const baseUrl = options.baseUrl ?? '';
 
-  async function doFetchJson<T>(
-    path: string,
-    init: RequestInit,
-  ): Promise<ChatSyncResult<T>> {
+  async function doFetchJson<T>(path: string, init: RequestInit): Promise<ChatSyncResult<T>> {
     try {
       const res = await fetch(`${baseUrl}${path}`, {
         ...init,
@@ -78,6 +94,8 @@ export function createChatSyncTransportHttp(options: ChatSyncHttpTransportOption
 
       if (!res.ok) {
         const body = await readJsonSafely(res);
+        const conflict = res.status === 409 ? tryParseConflict(body) : undefined;
+
         const msg =
           (body && typeof body.error === 'string' && body.error) ||
           `http ${res.status} ${res.statusText}`;
@@ -87,6 +105,8 @@ export function createChatSyncTransportHttp(options: ChatSyncHttpTransportOption
           error: msg,
           status: res.status,
           retryable: isRetryableHttpStatus(res.status),
+          body,
+          conflict,
         };
       }
 
@@ -111,7 +131,10 @@ export function createChatSyncTransportHttp(options: ChatSyncHttpTransportOption
       doFetchJson<ChatSyncListConversationsResponse>('/api/sync/conversations', { method: 'GET' }),
 
     getConversation: async (conversationId: DConversationId): Promise<ChatSyncResult<ChatSyncGetConversationResponse>> =>
-      doFetchJson<ChatSyncGetConversationResponse>(`/api/sync/conversations/${encodeURIComponent(conversationId)}`, { method: 'GET' }),
+      doFetchJson<ChatSyncGetConversationResponse>(
+        `/api/sync/conversations/${encodeURIComponent(conversationId)}`,
+        { method: 'GET' },
+      ),
 
     // Writes
     upsertConversation: async (req: ChatSyncUpsertRequest): Promise<ChatSyncResult<ChatSyncUpsertResponse>> =>
