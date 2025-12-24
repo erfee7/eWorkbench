@@ -30,6 +30,7 @@ import { SnackbarInsert } from '~/common/components/snackbar/SnackbarInsert';
 import { hasGoogleAnalytics, OptionalGoogleAnalytics } from '~/common/components/3rdparty/GoogleAnalytics';
 import { hasPostHogAnalytics, OptionalPostHogAnalytics } from '~/common/components/3rdparty/PostHogAnalytics';
 
+import { SyncBootstrap } from '~/common/sync/SyncBootstrap';
 
 const Big_AGI_App = ({ Component, emotionCache, pageProps }: MyAppProps) => {
 
@@ -51,6 +52,7 @@ const Big_AGI_App = ({ Component, emotionCache, pageProps }: MyAppProps) => {
           {/* ^ Backend capabilities & SSR boundary */}
           <ErrorBoundary outer>
             <ProviderBootstrapLogic>
+              <SyncBootstrap />
               <SnackbarInsert />
               {getLayout(<Component {...pageProps} />)}
               <OverlaysInsert />

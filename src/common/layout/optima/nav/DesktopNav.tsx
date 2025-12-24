@@ -35,6 +35,8 @@ import { scratchClipSupported, useScratchClipVisibility } from '../scratchclip/s
 
 export const bigAgiProUrl = 'https://big-agi.com' + clientUtmSource('upgrade-apps');
 
+const SHOW_BIG_AGI_PRO = false;
+const SHOW_SCRATCH_CLIP = false;
 
 const desktopNavBarSx: SxProps = {
   zIndex: themeZIndexDesktopNav,
@@ -170,6 +172,8 @@ export function DesktopNav(props: { component: React.ElementType, currentApp?: N
           sx={{ minWidth: 260 }}
         >
 
+        {SHOW_BIG_AGI_PRO && (
+          <>
           <MenuItem component='a' variant='solid' color='primary' href={bigAgiProUrl} target='_blank' sx={{ minHeight: 40 }}>
             {/*<ListItemDecorator>New</ListItemDecorator>*/}
             {/*<ListItemDecorator><RocketLaunchRounded /></ListItemDecorator>*/}
@@ -179,6 +183,8 @@ export function DesktopNav(props: { component: React.ElementType, currentApp?: N
           </MenuItem>
 
           <ListDivider />
+          </>
+        )}
 
           {/* APPS Section */}
           {overflowApps.length > 0 && (
@@ -203,17 +209,22 @@ export function DesktopNav(props: { component: React.ElementType, currentApp?: N
           {/* QUICK TOOLS Section */}
           <ListItem>
             <Typography level="body-xs" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-              Quick Tools
+              Analysis Tools
             </Typography>
           </ListItem>
           <MenuItem onClick={optimaActions().openAIXDebugger}>
             <ListItemDecorator><TerminalOutlinedIcon /></ListItemDecorator>
-            AI Inspector
+            LLM Request Inspector
           </MenuItem>
+        {SHOW_SCRATCH_CLIP && (
+          <>
           <MenuItem disabled={!scratchClipSupported()} onClick={toggleScratchClipVisibility}>
             <ListItemDecorator><HistoryIcon /></ListItemDecorator>
             {isScratchClipVisible ? 'Hide ' : ''}Clipboard {scratchClipSupported() ? 'History' : '(not supported)'}
           </MenuItem>
+          </>
+        )}
+
           <ListDivider />
 
           {/* SUPPORT Section */}
@@ -223,9 +234,9 @@ export function DesktopNav(props: { component: React.ElementType, currentApp?: N
             </Typography>
           </ListItem>
           <MenuItem component='a' href={BaseProduct.SupportForm()} target='_blank'>
-            <ListItemDecorator>🔥</ListItemDecorator>
+            <ListItemDecorator></ListItemDecorator>
             <div>
-              Improve Big-AGI
+              Improve Big-AGI (upstream)
               <FormHelperText>AI fixes what you report</FormHelperText>
             </div>
             <ArrowOutwardRoundedIcon sx={{ ml: 'auto' }} />

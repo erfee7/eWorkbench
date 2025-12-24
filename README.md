@@ -10,13 +10,45 @@ A transparent, inspectable workbench for working with modern **AI** tools — bu
 
 Early-stage fork. For now, eWorkbench tracks upstream closely while experimenting with changes that may diverge long-term.
 
-Planned ideas (not finalized): sync/accounts and additional QoL features.
+Current features: sync on startup (with auto conflict resolving)
+
+Planned ideas: realtime sync; account system; additional QoL features.
 
 ## Get Started
 
-At the moment, installation and configuration are the same as upstream Big-AGI Open.
+At the moment, we support a local docker deployment. First clone the repository by
 
-- Upstream installation guide: https://github.com/enricoros/big-agi/blob/main/docs/installation.md
+```
+git clone https://github.com/erfee7/eWorkbench.git
+cd eWorkbench
+```
+
+We are not providing a pre-built image currently, so you need to build by
+```
+docker compose build
+```
+
+After the build finish, start the containers by
+```
+docker compose up
+```
+and the service is up at `http://localhost:3000`.
+
+Or you can use a shortcut for build and deploy
+```
+docker compose up -d --build
+```
+
+- Upstream installation guide (for reference): https://github.com/enricoros/big-agi/blob/main/docs/installation.md
+
+## Data Ownership
+
+While the upstream big-AGI Open stores chat history only in the local IndexedDB, eWorkbench adds a sync feature and stores chat history also in a PostgresDB container on the server. Please be aware of such structural changes and you are trusting the server for your chat history data. 
+
+For the current version with no account system or authetication (except for the HTTP authetication option from the upstream project), the chat history is stored per-instance, i.e. everyone connecting to one deployed instance share their chat history.
+
+- Upstream data ownership guide (for reference): https://github.com/enricoros/big-AGI/blob/main/docs/help-data-ownership.md
+
 
 ## Attribution
 
@@ -25,7 +57,7 @@ eWorkbench is a fork of:
 **Big-AGI Open** — https://github.com/enricoros/big-agi  
 Created and maintained by **Enrico Ros** and contributors. Licensed under **MIT**.
 
-The **Sponsor** button in this repository points to the upstream Big-AGI project to support ongoing upstream development.
+The **Sponsor** button in this repository points to the Big-AGI project to support ongoing upstream development.
 
 This fork is not affiliated with the upstream project.
 
