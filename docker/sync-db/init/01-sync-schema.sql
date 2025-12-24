@@ -1,3 +1,5 @@
+-- docker/sync-db/init/01-sync-schema.sql
+
 -- Per-(user_id, conversation_id) monotonic revision + tombstone delete
 CREATE TABLE IF NOT EXISTS sync_conversations (
   user_id         text        NOT NULL,

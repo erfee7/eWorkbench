@@ -152,8 +152,8 @@ export const navItems: {
       icon: () => null,
     },
     {
-      name: 'Create Personas',
-      mobileName: 'Personas',
+      name: 'Prompts Creator',
+      mobileName: 'Prompts',
       icon: Diversity2Icon, // was: Outlined.. but they look the same
       // iconActive: Diversity2Icon,
       type: 'app',
@@ -212,7 +212,7 @@ export const navItems: {
       hideNav: hasNoChatLinkItems,
     },
     {
-      name: 'News',
+      name: 'Upstream News',
       icon: EventNoteOutlinedIcon,
       iconActive: EventNoteIcon,
       type: 'app',
@@ -247,17 +247,23 @@ export const navItems: {
     //   icon: TwitterIcon,
     //   href: 'https://twitter.com',
     // },
+    // {
+    //   type: 'extLink',
+    //   name: 'Discord',
+    //   icon: DiscordIcon,
+    //   href: Brand.URIs.SupportInvite,
+    // },
     {
       type: 'extLink',
-      name: 'Discord',
-      icon: DiscordIcon,
-      href: Brand.URIs.SupportInvite,
+      name: 'Upstream',
+      icon: GitHubIcon,
+      href: Brand.URIs.OpenRepo,
     },
     {
       type: 'extLink',
       name: 'GitHub',
       icon: GitHubIcon,
-      href: Brand.URIs.OpenRepo,
+      href: Brand.URIs.DownstreamFork,
     },
   ],
 

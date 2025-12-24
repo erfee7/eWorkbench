@@ -8,12 +8,12 @@
  */
 export const Brand = {
   Title: {
-    Base: 'big-AGI',
-    Common: (process.env.NODE_ENV === 'development' ? '[DEV] ' : '') + 'big-AGI',
+    Base: 'eWorkbench',
+    Common: (process.env.NODE_ENV === 'development' ? '[DEV] ' : '') + 'eWorkbench',
   },
   Meta: {
-    Description: 'Launch big-AGI to unlock the full potential of AI, with precise control over your data and models. Voice interface, AI personas, advanced features, and fun UX.',
-    SiteName: 'big-AGI | Precision AI for You',
+    Description: 'Launch eWorkbench to unlock the full potential of AI, with precise control over your data and models. Voice interface, AI personas, advanced features, and fun UX.',
+    SiteName: 'eWorkbench | Precision AI for You',
     ThemeColor: '#32383E',
     TwitterSite: '@enricoros',
   },
@@ -27,6 +27,7 @@ export const Brand = {
     // Twitter: 'https://www.twitter.com/enricoros',
     PrivacyPolicy: 'https://big-agi.com/privacy',
     TermsOfService: 'https://big-agi.com/terms',
+    DownstreamFork: "https://github.com/erfee7/eWorkbench",
   },
   Docs: {
     Public: (docPage: string) => `https://big-agi.com/docs/${docPage}`,
