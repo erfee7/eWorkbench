@@ -20,6 +20,8 @@ import { conversationTitle, createDConversation, DConversation, DConversationId,
 import { estimateTokensForFragments } from './chat.tokens';
 import { gcChatImageAssets } from '~/common/stores/chat/chat.gc';
 
+import { makeUserScopedKey } from '~/common/auth/userNamespace';
+
 
 /// Conversations Store
 
@@ -453,7 +455,8 @@ export const useChatStore = create<ConversationsStore>()(/*devtools(*/
 
     }),
     {
-      name: 'app-chats',
+      // Per-user partitioning (multi-user on same browser profile).
+      name: makeUserScopedKey('app-chats'),
       /* Version history:
        *  - 1: [2023-03-18] App launch, single chat
        *  - 2: [2023-04-10] Multi-chat version - invalidating data to be sure

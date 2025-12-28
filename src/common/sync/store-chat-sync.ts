@@ -3,6 +3,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import { makeUserScopedKey } from '~/common/auth/userNamespace';
+
 import type { DConversationId } from '~/common/stores/chat/chat.conversation';
 
 export type ChatSyncOpKind = 'upsert' | 'delete';
@@ -99,7 +101,8 @@ export const useChatSyncStore = create<ChatSyncStore>()(
         }),
     }),
     {
-      name: 'app-chat-sync',
+      // Per-user partitioning (multi-user on same browser profile).
+      name: makeUserScopedKey('app-chat-sync'),
       version: 1,
       // localStorage default is OK (small metadata).
       partialize: (state) => ({
