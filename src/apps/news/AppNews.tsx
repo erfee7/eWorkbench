@@ -41,7 +41,7 @@ export const newsRoadmapCallout =
         <Grid xs={12} sm={7}>
           <Button
             fullWidth variant='soft' color='primary' endDecorator={<LaunchIcon />}
-            component={Link} href={Brand.URIs.OpenProject} noLinkStyle target='_blank'
+            component={Link} href={Brand.URIs.UpstreamOpenProject} noLinkStyle target='_blank'
           >
             Explore
           </Button>
@@ -49,7 +49,7 @@ export const newsRoadmapCallout =
         <Grid xs={12} sm={5} sx={{ display: 'flex', flexAlign: 'center', justifyContent: 'center' }}>
           <Button
             fullWidth variant='plain' color='primary' endDecorator={<LaunchIcon />}
-            component={Link} href={Brand.URIs.OpenRepo + '/issues/new?template=roadmap-request.md&title=%5BSuggestion%5D'} noLinkStyle target='_blank'
+            component={Link} href={Brand.URIs.UpstreamRepo + '/issues/new?template=roadmap-request.md&title=%5BSuggestion%5D'} noLinkStyle target='_blank'
           >
             Suggest a Feature
           </Button>
@@ -202,11 +202,11 @@ export function AppNews() {
       }}>
 
         <Typography level='h1' sx={{ fontSize: '2.7rem', mb: 4 }}>
-          Welcome to <Box component='span' sx={{ animation: `${animationColorBlues} 10s infinite`, zIndex: 1 /* perf-opt */ }}>Big-AGI Open</Box>!
+          Welcome to <Box component='span' sx={{ animation: `${animationColorBlues} 10s infinite`, zIndex: 1 /* perf-opt */ }}>eWorkbench</Box>!
         </Typography>
 
         <Typography sx={{ mb: 2, textAlign: 'center', lineHeight: 'lg' }} level='title-sm'>
-          Big-AGI has been updated to version {firstNews?.versionCode}<br/>
+          eWorkbench has been updated to upstream version {firstNews?.versionCode}<br/>
           {/*You are running version {firstNews?.versionCode}<br/>*/}
           {/*{!!newsFrontendTimestamp && <span style={{ opacity: 0.5 }}>Updated <TimeAgo date={newsFrontendTimestamp} /></span>}*/}
         </Typography>
@@ -234,8 +234,7 @@ export function AppNews() {
                 // transform: 'translateY(-1px)',
               }}
             >
-              Big-AGI Pro
-              ✨
+              Big-AGI (Upstream)
             </Button>
           )}
         </Box>

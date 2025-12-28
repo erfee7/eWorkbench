@@ -342,7 +342,7 @@ export const NewsItems: NewsItem[] = [
     versionCode: '1.2.1',
     // text: '',
     items: [
-      { text: <>New home page: <b><Link href={Brand.URIs.Home + clientUtmSource()} target='_blank'>{Brand.URIs.Home.replace('https://', '')}</Link></b></> },
+      { text: <>New home page: <b><Link href={Brand.URIs.UpstreamHome + clientUtmSource()} target='_blank'>{Brand.URIs.UpstreamHome.replace('https://', '')}</Link></b></> },
       { text: 'Support 𝑓unction models' }, // (n)
       { text: <Box sx={{ display: 'flex', alignItems: 'center' }}>Labs: experiments</Box> }, // ⚗️🧬🔬🥼 🥽🧪 <ScienceIcon sx={{ fontSize: 24, opacity: 0.5 }} />
     ],
@@ -360,8 +360,8 @@ function B(props: {
   children: React.ReactNode
 }) {
   const href =
-    props.issue ? `${Brand.URIs.OpenRepo}/issues/${props.issue}`
-      : props.code ? `${Brand.URIs.OpenRepo}/blob/main/${props.code}`
+    props.issue ? `${Brand.URIs.UpstreamRepo}/issues/${props.issue}`
+      : props.code ? `${Brand.URIs.UpstreamRepo}/blob/main/${props.code}`
         : props.href;
   const boldText = (
     <Typography component='span' color={!!href ? 'primary' : 'neutral'} sx={{ fontWeight: 'lg' }}>

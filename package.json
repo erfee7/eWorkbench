@@ -1,9 +1,9 @@
 {
-  "name": "big-agi",
+  "name": "eworkbench",
   "version": "2.0.2",
   "private": true,
-  "author": "Enrico Ros <enrico.ros@gmail.com>",
-  "repository": "https://github.com/enricoros/big-agi",
+  "author": "erfee7 <erfee7@outlook.com>",
+  "repository": "https://github.com/erfee7/eWorkbench",
   "scripts": {
     "dev": "next dev --turbopack",
     "dev-debug": "cross-env NODE_OPTIONS='--inspect' next dev",

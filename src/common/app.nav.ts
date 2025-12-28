@@ -257,13 +257,13 @@ export const navItems: {
       type: 'extLink',
       name: 'Upstream',
       icon: GitHubIcon,
-      href: Brand.URIs.OpenRepo,
+      href: Brand.URIs.UpstreamRepo,
     },
     {
       type: 'extLink',
       name: 'GitHub',
       icon: GitHubIcon,
-      href: Brand.URIs.DownstreamFork,
+      href: Brand.URIs.OpenRepo,
     },
   ],
 
