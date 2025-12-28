@@ -1,6 +1,6 @@
 services:
   web:
-    image: eWorkbench-sync
+    image: eworkbench
     build:
       context: .
       dockerfile: Dockerfile
