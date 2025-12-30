@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(req: NextRequest) {
   try {
-    const { userId } = requireSyncAuthOrThrow(req);
+    const { userId } = await requireSyncAuthOrThrow(req);
 
     const items = await listConversationMetas(userId);
 

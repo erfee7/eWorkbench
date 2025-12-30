@@ -51,7 +51,7 @@ function inflateConversationFromSync(sync: SyncConversation): DConversation {
 export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => void {
   if (singletonStopAgent) return singletonStopAgent;
 
-  const { debug = true, traceSkips = false } = options;
+  const { debug = false, traceSkips = false } = options;
 
   function log(...args: any[]) {
     if (debug) console.log(...args);

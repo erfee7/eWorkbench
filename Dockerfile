@@ -68,6 +68,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/src/server/prisma ./src/server/prisma
 
+# Admin scripts (for closed-registration deployments)
+COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
+
 # Minimal ENV for production
 ENV NODE_ENV=production
 ENV PATH=$PATH:/app/node_modules/.bin

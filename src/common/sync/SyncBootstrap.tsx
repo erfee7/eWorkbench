@@ -17,8 +17,7 @@ export function SyncBootstrap() {
       return;
 
     const stop = startChatSyncAgent({
-      debug: true,
-      // do not spam skip logs unless explicitly desired
+      debug: false,
       traceSkips: false,
     });
 

@@ -44,7 +44,7 @@ function parseBaseRevision(value: any): number | null | undefined {
  */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ conversationId: string }> }) {
   try {
-    const { userId } = requireSyncAuthOrThrow(req);
+    const { userId } = await requireSyncAuthOrThrow(req);
     const { conversationId } = await ctx.params;
 
     if (!conversationId)
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ conversatio
  */
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ conversationId: string }> }) {
   try {
-    const { userId } = requireSyncAuthOrThrow(req);
+    const { userId } = await requireSyncAuthOrThrow(req);
     const { conversationId } = await ctx.params;
 
     if (!conversationId)
@@ -149,7 +149,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ conversatio
  */
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ conversationId: string }> }) {
   try {
-    const { userId } = requireSyncAuthOrThrow(req);
+    const { userId } = await requireSyncAuthOrThrow(req);
     const { conversationId } = await ctx.params;
 
     if (!conversationId)

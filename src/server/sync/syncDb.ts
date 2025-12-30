@@ -15,11 +15,11 @@ export function getSyncPgPool(): Pool {
   if (globalThis.__bigAgiSyncPgPool)
     return globalThis.__bigAgiSyncPgPool;
 
-  const url = process.env.SYNC_DATABASE_URL;
+  const url = process.env.PG_DATABASE_URL;
   if (!url) {
     // Do not throw at import-time; throw only when actually used.
     // This makes builds safer when sync is not configured.
-    throw new Error('SYNC_DATABASE_URL not configured');
+    throw new Error('PG_DATABASE_URL not configured');
   }
 
   const pool = new Pool({

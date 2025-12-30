@@ -7,6 +7,8 @@ services:
     container_name: eWorkbench-web
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
       # Next.js in containers sometimes needs explicit host binding
       - HOSTNAME=0.0.0.0
@@ -15,34 +17,34 @@ services:
       - NEXT_TELEMETRY_DISABLED=1
 
       # Present already so you don't have to rewire compose later.
-      - SYNC_DATABASE_URL=postgresql://syncuser:syncpwd@sync-db:5432/syncdb?sslmode=disable
-      - SYNC_TOKEN=dev-sync-token
+      - PG_DATABASE_URL=postgresql://pguser:pgpwd@pg:5432/pgdb?sslmode=disable
 
     depends_on:
-      sync-db:
+      pg:
         condition: service_healthy
     restart: unless-stopped
 
-  sync-db:
+  pg:
     image: postgres:16-alpine
-    container_name: eWorkbench-sync-db
+    container_name: eWorkbench-db
     environment:
-      - POSTGRES_DB=syncdb
-      - POSTGRES_USER=syncuser
-      - POSTGRES_PASSWORD=syncpwd
+      - POSTGRES_DB=pgdb
+      - POSTGRES_USER=pguser
+      - POSTGRES_PASSWORD=pgpwd
     # ports:
     #   # Optional: expose to host for debugging with a local DB tool
+    #   # Not recommended for safety in production deployments
     #   - "5432:5432"
     volumes:
-      - sync-db-data:/var/lib/postgresql/data
+      - pg-data:/var/lib/postgresql/data
       # Optional init scripts folder (safe to keep even empty)
-      - ./docker/sync-db/init:/docker-entrypoint-initdb.d:ro,Z
+      - ./docker/pg/init:/docker-entrypoint-initdb.d:ro,Z
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U syncuser -d syncdb"]
+      test: ["CMD-SHELL", "pg_isready -U pguser -d pgdb"]
       interval: 5s
       timeout: 3s
       retries: 20
     restart: unless-stopped
 
 volumes:
-  sync-db-data:
+  pg-data:
