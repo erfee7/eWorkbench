@@ -1,3 +1,5 @@
+// This is incompatible with the account system provided in eWorkbench. Do not use.
+
 /**
  * Middleware to protect `big-AGI` with HTTP Basic Authentication
  *

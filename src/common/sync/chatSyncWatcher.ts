@@ -64,7 +64,7 @@ type PendingIntent = {
  */
 export function startChatSyncWatcher(options: ChatSyncWatcherOptions = {}): () => void {
   const {
-    debounceMs = 900,
+    debounceMs = 1000,
     maxWaitMs = 5000,
     debug = false,
     traceSkips = false,

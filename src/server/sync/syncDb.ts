@@ -1,6 +1,7 @@
 // src/server/sync/syncDb.ts
 
 import { Pool } from 'pg';
+import { securityConfig } from '~/server/security/securityConfig';
 
 /**
  * Next.js dev mode may reload modules. To avoid creating too many pools,
@@ -22,8 +23,20 @@ export function getSyncPgPool(): Pool {
     throw new Error('PG_DATABASE_URL not configured');
   }
 
+  const statementTimeout = securityConfig.pg.statementTimeoutMs;
+  const pgOptions = statementTimeout > 0
+    ? `-c statement_timeout=${statementTimeout}`
+    : undefined;
+
   const pool = new Pool({
     connectionString: url,
+    max: securityConfig.pg.poolMax,
+    connectionTimeoutMillis: securityConfig.pg.connectionTimeoutMs,
+    idleTimeoutMillis: securityConfig.pg.idleTimeoutMs,
+
+    // Pragmatic guardrail: prevents a request from tying up DB forever.
+    // (Disable by setting PG_STATEMENT_TIMEOUT_MS=0)
+    options: pgOptions,
   });
 
   globalThis.__bigAgiSyncPgPool = pool;

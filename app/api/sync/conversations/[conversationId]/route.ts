@@ -12,6 +12,12 @@ import type {
   SyncUpsertConversationResponse,
 } from '~/server/sync/syncTypes';
 
+import { securityConfig } from '~/server/security/securityConfig';
+import { requireSameOriginOrThrow } from '~/server/security/originGuard';
+import { readJsonWithLimit, readOptionalJsonWithLimit } from '~/server/security/bodyLimit';
+import { requireRateLimitOrThrow } from '~/server/security/rateLimit';
+import { requireValidConversationIdOrThrow } from '~/server/sync/syncValidation';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +44,10 @@ function parseBaseRevision(value: any): number | null | undefined {
   return NaN as any;
 }
 
+function mergeNoStoreHeaders(extra?: Record<string, string>) {
+  return { 'Cache-Control': 'no-store', ...(extra || {}) };
+}
+
 /**
  * GET /api/sync/conversations/:conversationId
  * Fetch full data (opaque blob). Used on revision mismatch/conflict resolution.
@@ -47,12 +57,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ conversatio
     const { userId } = await requireSyncAuthOrThrow(req);
     const { conversationId } = await ctx.params;
 
-    if (!conversationId)
-      return badRequest('missing conversationId');
+    requireValidConversationIdOrThrow(conversationId);
 
     const row = await getConversation(userId, conversationId);
     if (!row) {
-      return NextResponse.json({ error: 'not found' }, { status: 404, headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json({ error: 'not found' }, { status: 404, headers: mergeNoStoreHeaders() });
     }
 
     const body: SyncGetConversationResponse = {
@@ -62,12 +71,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ conversatio
       data: row.deleted ? null : row.data,
     };
 
-    return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json(body, { headers: mergeNoStoreHeaders() });
   } catch (err: any) {
     const status = typeof err?.status === 'number' ? err.status : 500;
     return NextResponse.json(
       { error: err?.message || 'sync get failed' },
-      { status, headers: { 'Cache-Control': 'no-store' } },
+      { status, headers: mergeNoStoreHeaders(err?.headers) },
     );
   }
 }
@@ -85,10 +94,29 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ conversatio
     const { userId } = await requireSyncAuthOrThrow(req);
     const { conversationId } = await ctx.params;
 
-    if (!conversationId)
-      return badRequest('missing conversationId');
+    requireValidConversationIdOrThrow(conversationId);
 
-    const bodyJson = (await req.json()) as Partial<SyncUpsertConversationRequest>;
+    // Cookie-auth write endpoint: enforce same-origin in production (nginx-ready).
+    if (securityConfig.sync.requireSameOriginWrites) {
+      requireSameOriginOrThrow(req);
+    }
+
+    // Per-user write throttling: contains buggy clients and casual abuse.
+    requireRateLimitOrThrow(`sync-write:${userId}`, {
+      maxPerWindow: securityConfig.sync.writeRateLimit.maxPerWindow,
+      windowMs: securityConfig.sync.writeRateLimit.windowMs,
+      blockMs: securityConfig.sync.writeRateLimit.blockMs,
+    });
+
+    const bodyJson = await readJsonWithLimit<Partial<SyncUpsertConversationRequest>>(
+      req,
+      securityConfig.sync.maxWriteBodyBytes,
+    );
+
+    // Basic shape check (avoid weird payloads; still opaque data blob overall).
+    if (!bodyJson || typeof bodyJson !== 'object' || Array.isArray(bodyJson)) {
+      return badRequest('invalid body (must be object)');
+    }
 
     const baseRevisionParsed = parseBaseRevision((bodyJson as any).baseRevision);
     if (Number.isNaN(baseRevisionParsed as any))
@@ -112,7 +140,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ conversatio
 
     if (result.ok) {
       const resp: SyncUpsertConversationResponse = { conversationId, revision: result.revision };
-      return NextResponse.json(resp, { headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json(resp, { headers: mergeNoStoreHeaders() });
     }
 
     if (result.kind === 'conflict') {
@@ -121,18 +149,15 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ conversatio
 
     if (result.kind === 'notfound') {
       // baseRevision was non-null but row missing: treat as conflict-ish condition.
-      return NextResponse.json(
-        { error: 'not found' },
-        { status: 404, headers: { 'Cache-Control': 'no-store' } },
-      );
+      return NextResponse.json({ error: 'not found' }, { status: 404, headers: mergeNoStoreHeaders() });
     }
 
-    return NextResponse.json({ error: 'unknown error' }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ error: 'unknown error' }, { status: 500, headers: mergeNoStoreHeaders() });
   } catch (err: any) {
     const status = typeof err?.status === 'number' ? err.status : 500;
     return NextResponse.json(
       { error: err?.message || 'sync put failed' },
-      { status, headers: { 'Cache-Control': 'no-store' } },
+      { status, headers: mergeNoStoreHeaders(err?.headers) },
     );
   }
 }
@@ -152,16 +177,26 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ conversa
     const { userId } = await requireSyncAuthOrThrow(req);
     const { conversationId } = await ctx.params;
 
-    if (!conversationId)
-      return badRequest('missing conversationId');
+    requireValidConversationIdOrThrow(conversationId);
 
-    // DELETE bodies are allowed here (Next route handlers + fetch are fine with it).
-    // If a client/tool cannot send a body, we'll treat missing baseRevision as null.
-    let bodyJson: Partial<SyncDeleteConversationRequest> = {};
-    try {
-      bodyJson = (await req.json()) as Partial<SyncDeleteConversationRequest>;
-    } catch {
-      // no body -> baseRevision defaults to null below
+    if (securityConfig.sync.requireSameOriginWrites) {
+      requireSameOriginOrThrow(req);
+    }
+
+    requireRateLimitOrThrow(`sync-write:${userId}`, {
+      maxPerWindow: securityConfig.sync.writeRateLimit.maxPerWindow,
+      windowMs: securityConfig.sync.writeRateLimit.windowMs,
+      blockMs: securityConfig.sync.writeRateLimit.blockMs,
+    });
+
+    const bodyJson = await readOptionalJsonWithLimit<Partial<SyncDeleteConversationRequest>>(
+      req,
+      securityConfig.sync.maxWriteBodyBytes,
+      {},
+    );
+
+    if (!bodyJson || typeof bodyJson !== 'object' || Array.isArray(bodyJson)) {
+      return badRequest('invalid body (must be object)');
     }
 
     const baseRevisionParsed = parseBaseRevision((bodyJson as any).baseRevision);
@@ -174,7 +209,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ conversa
 
     if (result.ok) {
       const resp: SyncDeleteConversationResponse = { conversationId, revision: result.revision };
-      return NextResponse.json(resp, { headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json(resp, { headers: mergeNoStoreHeaders() });
     }
 
     if (result.kind === 'conflict') {
@@ -184,18 +219,15 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ conversa
     if (result.kind === 'notfound') {
       // If baseRevision is non-null and row missing, we return 404.
       // (Alternatively could 409, but 404 makes debugging clearer.)
-      return NextResponse.json(
-        { error: 'not found' },
-        { status: 404, headers: { 'Cache-Control': 'no-store' } },
-      );
+      return NextResponse.json({ error: 'not found' }, { status: 404, headers: mergeNoStoreHeaders() });
     }
 
-    return NextResponse.json({ error: 'unknown error' }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ error: 'unknown error' }, { status: 500, headers: mergeNoStoreHeaders() });
   } catch (err: any) {
     const status = typeof err?.status === 'number' ? err.status : 500;
     return NextResponse.json(
       { error: err?.message || 'sync delete failed' },
-      { status, headers: { 'Cache-Control': 'no-store' } },
+      { status, headers: mergeNoStoreHeaders(err?.headers) },
     );
   }
 }
