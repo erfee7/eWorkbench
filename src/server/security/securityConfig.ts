@@ -33,6 +33,19 @@ export const securityConfig = {
     failDelayMs: envInt('EW_LOGIN_FAIL_DELAY_MS', 250),
   },
 
+  // ---- Session validation (JWT + user exists+active in PG), cached in middleware ----
+  auth: {
+    // Middleware cache TTL (seconds) for "session is valid" checks.
+    validationTtlSeconds: envInt('EW_AUTH_VALIDATION_TTL_SECONDS', 30),
+
+    // Rate limit for /api/Winternal/validate-session (keyed by user id).
+    validateRateLimit: {
+      maxPerWindow: envInt('EW_AUTH_VALIDATE_MAX_PER_WINDOW', 60),
+      windowMs: envInt('EW_AUTH_VALIDATE_WINDOW_MS', 60 * 1000),
+      blockMs: envInt('EW_AUTH_VALIDATE_BLOCK_MS', 60 * 1000),
+    },
+  },
+
   // ---- Sync request protections ----
   sync: {
     // App-level payload cap (nginx should also enforce later).
