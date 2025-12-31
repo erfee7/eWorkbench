@@ -4,7 +4,7 @@
 // Docker usage example (TTY required for prompts):
 //   docker compose exec -it web node scripts/accounts.js create --username Alice
 
-const { parseArgs, usageErrorAndExit } = require('./lib/args');
+const { parseArgs } = require('./lib/args');
 const { isCliError } = require('./lib/errors');
 
 const cmdCreate = require('./commands/create');
@@ -41,9 +41,6 @@ async function main() {
 
     case 'delete':
       return cmdDelete(args);
-
-    default:
-      usageErrorAndExit(1, `Unknown command: ${args.command}`);
   }
 }
 
