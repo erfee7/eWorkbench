@@ -7,4 +7,7 @@ export interface AuthUserRow {
   username: string;
   passwordHash: string;
   isActive: boolean;
+
+  // Prepared for future authorization features (no functional use yet).
+  isAdmin: boolean;
 }

@@ -12,7 +12,8 @@ export async function getUserByUsername(username: string): Promise<AuthUserRow |
         id,
         username,
         password_hash AS "passwordHash",
-        is_active AS "isActive"
+        is_active AS "isActive",
+        is_admin AS "isAdmin"
       FROM auth_users
       WHERE username = $1
       LIMIT 1

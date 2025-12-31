@@ -20,9 +20,7 @@ export const nextAuthOptions: NextAuthOptions = {
   // Required in production; also used by getToken() verification.
   secret: process.env.NEXTAUTH_SECRET,
 
-  pages: {
-    signIn: '/login',
-  },
+  pages: { signIn: '/login' },
 
   providers: [
     CredentialsProvider({
@@ -80,17 +78,25 @@ export const nextAuthOptions: NextAuthOptions = {
         // Successful login: clear limiter for this key (keeps UX snappy).
         resetRateLimit(rlKey);
 
-        return { id: user.id, name: user.username };
+        // NOTE: extra fields (like isAdmin) are safe to attach; we'll persist them via jwt() callback.
+        return { id: user.id, name: user.username, isAdmin: user.isAdmin } as any;
       },
     }),
   ],
 
   callbacks: {
+    async jwt({ token, user }) {
+      // Persist isAdmin in the JWT so middleware/APIs/UI can read it later if needed.
+      if (user) (token as any).isAdmin = (user as any).isAdmin ?? false;
+      return token;
+    },
+
     async session({ session, token }) {
       // Attach user id for potential UI usage later (e.g. display/account menus).
       (session.user as any) = {
         ...(session.user || {}),
         id: token.sub,
+        isAdmin: (token as any).isAdmin ?? false,
       };
       return session;
     },

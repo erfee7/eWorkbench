@@ -1,12 +1,13 @@
 // src/server/auth/authDb.ts
 
 import type { Pool } from 'pg';
-import { getSyncPgPool } from '~/server/sync/syncDb';
+import { getPgPool } from '~/server/db/pgPool';
 
 /**
- * Auth and sync share the same Postgres database for now (PG_DATABASE_URL).
- * This avoids touching upstream Prisma wiring.
+ * @deprecated
+ * Auth and sync share the same Postgres database now (PG_DATABASE_URL).
+ * Use getPgPool() from ~/server/db/pgPool instead.
  */
 export function getAuthPgPool(): Pool {
-  return getSyncPgPool();
+  return getPgPool();
 }

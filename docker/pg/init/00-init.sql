@@ -1,5 +1,4 @@
--- docker/sync-db/init/00-init.sql
+-- docker/pg/init/00-init.sql
 
--- Safe minimal init. No schema decisions yet.
--- Helpful later if you want UUIDs, etc.
+-- Safe minimal init
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
