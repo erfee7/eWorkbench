@@ -48,3 +48,18 @@ export async function getUserById(userId: string): Promise<AuthUserRow | null> {
 
   return res.rows[0] ?? null;
 }
+
+export async function updateUserPasswordHash(userId: string, passwordHash: string): Promise<boolean> {
+  const pool = getAuthPgPool();
+
+  const res = await pool.query(
+    `
+      UPDATE auth_users
+      SET password_hash = $2
+      WHERE id = $1
+    `,
+    [userId, passwordHash],
+  );
+
+  return res.rowCount === 1;
+}
