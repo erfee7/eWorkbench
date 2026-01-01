@@ -10,9 +10,9 @@ A transparent, inspectable workbench for working with modern **AI** tools — bu
 
 Early-stage fork. For now, eWorkbench tracks upstream closely while experimenting with changes that may diverge long-term.
 
-Current features: sync on startup (with auto conflict resolving)
+Current features: basic account system (username + password); chat message sync on startup.
 
-Planned ideas: realtime sync; account system; additional QoL features.
+Planned ideas: real time sync, VPS setup structure, additional QoL features.
 
 ## Get Started
 
@@ -45,10 +45,19 @@ docker compose up -d --build
 
 While the upstream big-AGI Open stores chat history only in the local IndexedDB, eWorkbench adds a sync feature and stores chat history also in a PostgresDB container on the server. Please be aware of such structural changes and you are trusting the server for your chat history data. 
 
-For the current version with no account system or authetication (except for the HTTP authetication option from the upstream project), the chat history is stored per-instance, i.e. everyone connecting to one deployed instance share their chat history.
+The current version has a simple account system (username + password only), and chat history is stored per-user in local IndexedDB. Be aware that anyone with access to the device you use eWorkbench can just export the entire chat history from it. You have an option to clear all local data (cloud sync is still kept) when log out to ensure privacy.
 
 - Upstream data ownership guide (for reference): https://github.com/enricoros/big-AGI/blob/main/docs/help-data-ownership.md
 
+## Account Managing
+
+Currently, the account system in eWorkbench is rather simple. Users can log in only by username and password. This account system is mainly designed for deployment security (only authorized client can use the service) and chat history separation. 
+
+We don't have any open registration function now. The accounts are managed by `scripts/accounts.js`. In the default deployment in docker, run
+```
+docker compose exec -it web node scripts/accounts.js --help
+```
+to see the usage of this script.
 
 ## Attribution
 

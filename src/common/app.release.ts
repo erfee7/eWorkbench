@@ -60,7 +60,7 @@ export const Release = {
 
 export const BaseProduct = {
   ProductName: 'eWorkbench',
-  ProductURL: '',
+  ProductURL: 'https://github.com/erfee7/eWorkbench',
   PrivacyPolicy: 'https://big-agi.com/privacy',
   TermsOfService: 'https://big-agi.com/terms',
   // ecosystem

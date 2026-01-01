@@ -13,21 +13,7 @@ import type {
   ChatSyncUpsertResponse,
 } from '~/common/sync/chatSyncTransport';
 
-/**
- * TEMP AUTH (per current decision):
- * Hardcode a dev token in client code to unblock end-to-end.
- *
- * Later this should move to a safer mechanism (settings, cookies, PATs, accounts).
- */
-const HARD_CODED_SYNC_TOKEN = 'dev-sync-token';
-
 export interface ChatSyncHttpTransportOptions {
-  /**
-   * Optional override for testing.
-   * If omitted, uses HARD_CODED_SYNC_TOKEN.
-   */
-  token?: string;
-
   /**
    * Optional base URL. Defaults to same-origin.
    * Useful for tests, reverse proxies, etc.
@@ -36,7 +22,7 @@ export interface ChatSyncHttpTransportOptions {
 }
 
 function isRetryableHttpStatus(status: number): boolean {
-  // conservative retry policy
+  // Conservative retry policy (auth failures are not retryable).
   return status === 429 || (status >= 500 && status <= 599);
 }
 
@@ -78,16 +64,19 @@ function tryParseConflict(body: any): ChatSyncConflict | undefined {
 }
 
 export function createChatSyncTransportHttp(options: ChatSyncHttpTransportOptions = {}): ChatSyncTransport {
-  const token = options.token ?? HARD_CODED_SYNC_TOKEN;
   const baseUrl = options.baseUrl ?? '';
 
   async function doFetchJson<T>(path: string, init: RequestInit): Promise<ChatSyncResult<T>> {
     try {
       const res = await fetch(`${baseUrl}${path}`, {
         ...init,
+
+        // IMPORTANT: sync auth is cookie/JWT-based now (NextAuth).
+        // credentials=include ensures cookies are sent even if baseUrl is provided.
+        credentials: 'include',
+
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
           ...(init.headers || {}),
         },
       });
@@ -154,7 +143,6 @@ export function createChatSyncTransportHttp(options: ChatSyncHttpTransportOption
         `/api/sync/conversations/${encodeURIComponent(req.conversationId)}`,
         {
           method: 'DELETE',
-          // IMPORTANT: Next route handlers accept DELETE body; we rely on that.
           body: JSON.stringify({
             baseRevision: req.baseRevision,
           }),

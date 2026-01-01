@@ -2,17 +2,22 @@
 
 import * as React from 'react';
 import { startChatSyncAgent } from './chatSyncAgent';
+import { getBootUserNamespace, isUnauthorizedNamespace } from '~/common/auth/userNamespace';
 
 /**
  * This component renders nothing.
- * It only exists to "start" the background watcher on the client.
+ * It only exists to "start" the background sync agent on the client.
  */
 export function SyncBootstrap() {
   React.useEffect(() => {
-    const isDev = process.env.NODE_ENV === 'development';
+    const ns = getBootUserNamespace();
+
+    // When unauthenticated (future login page), avoid running background sync.
+    if (isUnauthorizedNamespace(ns))
+      return;
+
     const stop = startChatSyncAgent({
-      debug: true,
-      // do not spam skip logs unless explicitly desired
+      debug: false,
       traceSkips: false,
     });
 

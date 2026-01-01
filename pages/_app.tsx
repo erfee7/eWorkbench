@@ -32,6 +32,8 @@ import { hasPostHogAnalytics, OptionalPostHogAnalytics } from '~/common/componen
 
 import { SyncBootstrap } from '~/common/sync/SyncBootstrap';
 
+import { SessionProvider } from 'next-auth/react';
+
 const Big_AGI_App = ({ Component, emotionCache, pageProps }: MyAppProps) => {
 
   // We are using a nextjs per-page layout pattern to bring the (Optima) layout creation to a shared place
@@ -46,21 +48,24 @@ const Big_AGI_App = ({ Component, emotionCache, pageProps }: MyAppProps) => {
       <meta name='viewport' content='minimum-scale=1, initial-scale=1, width=device-width, shrink-to-fit=no' />
     </Head>
 
-    <ProviderTheming emotionCache={emotionCache}>
-      <ProviderSingleTab>
-        <ProviderBackendCapabilities>
-          {/* ^ Backend capabilities & SSR boundary */}
-          <ErrorBoundary outer>
-            <ProviderBootstrapLogic>
-              <SyncBootstrap />
-              <SnackbarInsert />
-              {getLayout(<Component {...pageProps} />)}
-              <OverlaysInsert />
-            </ProviderBootstrapLogic>
-          </ErrorBoundary>
-        </ProviderBackendCapabilities>
-      </ProviderSingleTab>
-    </ProviderTheming>
+    <SessionProvider session={(pageProps as any)?.session}>
+      <ProviderTheming emotionCache={emotionCache}>
+        <ProviderSingleTab>
+          <ProviderBackendCapabilities>
+            {/* ^ Backend capabilities & SSR boundary */}
+            <ErrorBoundary outer>
+              <ProviderBootstrapLogic>
+                <SyncBootstrap />
+                <SnackbarInsert />
+                {getLayout(<Component {...pageProps} />)}
+                <OverlaysInsert />
+             </ProviderBootstrapLogic>
+            </ErrorBoundary>
+         </ProviderBackendCapabilities>
+       </ProviderSingleTab>
+     </ProviderTheming>
+    </SessionProvider>
+    
 
     {hasGoogleAnalytics && <OptionalGoogleAnalytics />}
     {hasPostHogAnalytics && <OptionalPostHogAnalytics />}

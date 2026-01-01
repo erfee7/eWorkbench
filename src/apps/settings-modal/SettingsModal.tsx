@@ -23,6 +23,7 @@ import { PhVoice } from '~/common/components/icons/phosphor/PhVoice';
 import { optimaActions } from '~/common/layout/optima/useOptima';
 import { useIsMobile } from '~/common/components/useMatchMedia';
 
+import { AccountSettings } from './settings-ui/AccountSettings';
 import { AppChatSettingsAI } from './AppChatSettingsAI';
 import { AppChatSettingsUI } from './settings-ui/AppChatSettingsUI';
 import { UxLabsSettings } from './UxLabsSettings';
@@ -250,6 +251,7 @@ export function SettingsModal(props: {
           <Tab value='voice' disableIndicator sx={_styles.tabsListTab}>Voice</Tab>
           <Tab value='draw' disableIndicator sx={_styles.tabsListTab}>Draw</Tab>
           <Tab value='tools' disableIndicator sx={_styles.tabsListTab}>Tools</Tab>
+          <Tab value='account' disableIndicator sx={_styles.tabsListTab}>Account</Tab>
         </TabList>
 
         <TabPanel value='chat' color='primary' variant='outlined' sx={_styles.tabPanel}>
@@ -339,6 +341,9 @@ export function SettingsModal(props: {
             </Topic>
             {/*<Topic icon='🛠' title='Other tools...' />*/}
           </Topics>
+        </TabPanel>
+        <TabPanel value='account' color='primary' variant='outlined' sx={_styles.tabPanel}>
+          <AccountSettings onRequestCloseSettings={props.onClose} />
         </TabPanel>
       </Tabs>
 

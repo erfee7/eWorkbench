@@ -1,36 +1,28 @@
 // src/server/sync/syncAuth.ts
 
 import type { NextRequest } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 import type { SyncUserId } from './syncTypes';
+import { makeHttpError } from '~/server/http/error';
 
 /**
- * Sync auth v1: a single shared token for the whole instance.
+ * Sync auth v2: derive user from NextAuth JWT session cookie.
+ * This enables real per-user remote separation (sync_conversations.user_id).
  */
-export function requireSyncAuthOrThrow(req: NextRequest): { userId: SyncUserId } {
-  const configuredToken = process.env.SYNC_TOKEN;
+export async function requireSyncAuthOrThrow(req: NextRequest): Promise<{ userId: SyncUserId }> {
+  const secret = process.env.NEXTAUTH_SECRET;
 
-  // 503 instead of 401: the server is not configured for sync.
-  if (!configuredToken) {
-    const err = new Error('SYNC_TOKEN not configured');
-    (err as any).status = 503;
-    throw err;
+  // 503: server misconfigured (cannot validate sessions)
+  if (!secret) {
+    throw makeHttpError(503, 'server_misconfigured');
   }
 
-  const auth = req.headers.get('authorization') || '';
-  const prefix = 'Bearer ';
-  if (!auth.startsWith(prefix)) {
-    const err = new Error('missing bearer token');
-    (err as any).status = 401;
-    throw err;
+  const token = await getToken({ req, secret });
+  const userId = typeof token?.sub === 'string' ? token.sub : null;
+
+  if (!userId) {
+    throw makeHttpError(401, 'unauthorized');
   }
 
-  const token = auth.slice(prefix.length).trim();
-  if (!token || token !== configuredToken) {
-    const err = new Error('invalid bearer token');
-    (err as any).status = 401;
-    throw err;
-  }
-
-  // v1: single-user mapping
-  return { userId: 'default' };
+  return { userId };
 }

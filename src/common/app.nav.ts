@@ -253,12 +253,12 @@ export const navItems: {
     //   icon: DiscordIcon,
     //   href: Brand.URIs.SupportInvite,
     // },
-    {
-      type: 'extLink',
-      name: 'Upstream',
-      icon: GitHubIcon,
-      href: Brand.URIs.UpstreamRepo,
-    },
+    // {
+    //   type: 'extLink',
+    //   name: 'Upstream',
+    //   icon: GitHubIcon,
+    //   href: Brand.URIs.UpstreamRepo,
+    // },
     {
       type: 'extLink',
       name: 'GitHub',
