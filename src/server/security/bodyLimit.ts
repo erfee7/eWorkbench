@@ -1,6 +1,6 @@
 // src/server/security/bodyLimit.ts
 
-import { makeHttpError } from './httpError';
+import { makeHttpError } from '~/server/http/error';
 
 export async function readTextWithLimit(req: Request, maxBytes: number): Promise<string> {
   // If body is absent, treat as empty.

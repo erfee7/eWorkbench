@@ -3,6 +3,7 @@
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import type { SyncUserId } from './syncTypes';
+import { makeHttpError } from '~/server/http/error';
 
 /**
  * Sync auth v2: derive user from NextAuth JWT session cookie.
@@ -13,18 +14,14 @@ export async function requireSyncAuthOrThrow(req: NextRequest): Promise<{ userId
 
   // 503: server misconfigured (cannot validate sessions)
   if (!secret) {
-    const err = new Error('NEXTAUTH_SECRET not configured');
-    (err as any).status = 503;
-    throw err;
+    throw makeHttpError(503, 'server_misconfigured');
   }
 
   const token = await getToken({ req, secret });
   const userId = typeof token?.sub === 'string' ? token.sub : null;
 
   if (!userId) {
-    const err = new Error('unauthorized');
-    (err as any).status = 401;
-    throw err;
+    throw makeHttpError(401, 'unauthorized');
   }
 
   return { userId };

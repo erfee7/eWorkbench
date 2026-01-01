@@ -1,6 +1,6 @@
 // src/server/sync/syncValidation.ts
 
-import { makeHttpError } from '~/server/security/httpError';
+import { makeHttpError } from '~/server/http/error';
 import { securityConfig } from '~/server/security/securityConfig';
 
 const SAFE_ID_RE = /^[A-Za-z0-9_-]+$/;

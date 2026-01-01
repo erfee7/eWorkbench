@@ -1,5 +1,7 @@
 // src/common/auth/userNamespace.ts
 
+// This file is imported by middleware. Keep it edge-safe.
+
 /**
  * Local user namespace (v1).
  *

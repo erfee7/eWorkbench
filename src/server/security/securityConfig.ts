@@ -1,5 +1,7 @@
 // src/server/security/securityConfig.ts
 
+// This file is imported by middleware. Keep it edge-safe.
+
 function envInt(name: string, def: number): number {
   const raw = process.env[name];
   if (!raw) return def;
@@ -38,7 +40,7 @@ export const securityConfig = {
     // Middleware cache TTL (seconds) for "session is valid" checks.
     validationTtlSeconds: envInt('EW_AUTH_VALIDATION_TTL_SECONDS', 30),
 
-    // Rate limit for /api/Winternal/validate-session (keyed by user id).
+    // Rate limit for /api/internal/validate-session (keyed by user id).
     validateRateLimit: {
       maxPerWindow: envInt('EW_AUTH_VALIDATE_MAX_PER_WINDOW', 60),
       windowMs: envInt('EW_AUTH_VALIDATE_WINDOW_MS', 60 * 1000),

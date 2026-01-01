@@ -1,6 +1,6 @@
 // app/api/sync/conversations/[conversationId]/route.ts
 
-import { NextResponse, type NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { requireSyncAuthOrThrow } from '~/server/sync/syncAuth';
 import { getConversation, tryTombstoneConversation, tryUpsertConversation } from '~/server/sync/syncRepo';
 import type {
@@ -17,12 +17,17 @@ import { requireSameOriginOrThrow } from '~/server/security/originGuard';
 import { readJsonWithLimit, readOptionalJsonWithLimit } from '~/server/security/bodyLimit';
 import { requireRateLimitOrThrow } from '~/server/security/rateLimit';
 import { requireValidConversationIdOrThrow } from '~/server/sync/syncValidation';
+import { jsonErrorFromThrowable, jsonNoStore } from '~/server/http/routeResponses';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function badRequest(message: string) {
-  return NextResponse.json({ error: message }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+function badRequest(code: string) {
+  return jsonNoStore({ error: code }, { status: 400 });
+}
+
+function notFound() {
+  return jsonNoStore({ error: 'not_found' }, { status: 404 });
 }
 
 function conflict(conversationId: string, revision: number, deleted: boolean) {
@@ -32,7 +37,7 @@ function conflict(conversationId: string, revision: number, deleted: boolean) {
     revision,
     deleted,
   };
-  return NextResponse.json(body, { status: 409, headers: { 'Cache-Control': 'no-store' } });
+  return jsonNoStore(body, { status: 409 });
 }
 
 function parseBaseRevision(value: any): number | null | undefined {
@@ -42,10 +47,6 @@ function parseBaseRevision(value: any): number | null | undefined {
   if (value === null) return null;
   if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value;
   return NaN as any;
-}
-
-function mergeNoStoreHeaders(extra?: Record<string, string>) {
-  return { 'Cache-Control': 'no-store', ...(extra || {}) };
 }
 
 /**
@@ -60,9 +61,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ conversatio
     requireValidConversationIdOrThrow(conversationId);
 
     const row = await getConversation(userId, conversationId);
-    if (!row) {
-      return NextResponse.json({ error: 'not found' }, { status: 404, headers: mergeNoStoreHeaders() });
-    }
+    if (!row) return notFound();
 
     const body: SyncGetConversationResponse = {
       conversationId: row.conversationId,
@@ -71,13 +70,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ conversatio
       data: row.deleted ? null : row.data,
     };
 
-    return NextResponse.json(body, { headers: mergeNoStoreHeaders() });
-  } catch (err: any) {
-    const status = typeof err?.status === 'number' ? err.status : 500;
-    return NextResponse.json(
-      { error: err?.message || 'sync get failed' },
-      { status, headers: mergeNoStoreHeaders(err?.headers) },
-    );
+    return jsonNoStore(body);
+  } catch (err: unknown) {
+    return jsonErrorFromThrowable(err, code => ({ error: code }), {
+      logLabel: 'sync:get-conversation',
+      fallbackCode: 'server_error',
+    });
   }
 }
 
@@ -115,32 +113,31 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ conversatio
 
     // Basic shape check (avoid weird payloads; still opaque data blob overall).
     if (!bodyJson || typeof bodyJson !== 'object' || Array.isArray(bodyJson)) {
-      return badRequest('invalid body (must be object)');
+      return badRequest('invalid_body');
     }
 
     const baseRevisionParsed = parseBaseRevision((bodyJson as any).baseRevision);
     if (Number.isNaN(baseRevisionParsed as any))
-      return badRequest('invalid baseRevision (must be number or null)');
+      return badRequest('invalid_base_revision');
 
     // If baseRevision key is missing, treat as null (create semantics).
     // This is forgiving for early clients and manual testing.
     const baseRevision = baseRevisionParsed === undefined ? null : baseRevisionParsed;
 
     if (bodyJson.data === undefined)
-      return badRequest('missing data');
+      return badRequest('missing_data');
 
-    // Optional but strongly recommended: enforce path id == payload id to avoid mistakes.
     // The client payload is expected to contain `.id`.
     const payloadId = (bodyJson.data as any)?.id;
     if (payloadId !== undefined && payloadId !== conversationId) {
-      return badRequest('payload id does not match conversationId path param');
+      return badRequest('payload_id_mismatch');
     }
 
     const result = await tryUpsertConversation(userId, conversationId, baseRevision, bodyJson.data);
 
     if (result.ok) {
       const resp: SyncUpsertConversationResponse = { conversationId, revision: result.revision };
-      return NextResponse.json(resp, { headers: mergeNoStoreHeaders() });
+      return jsonNoStore(resp);
     }
 
     if (result.kind === 'conflict') {
@@ -149,16 +146,15 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ conversatio
 
     if (result.kind === 'notfound') {
       // baseRevision was non-null but row missing: treat as conflict-ish condition.
-      return NextResponse.json({ error: 'not found' }, { status: 404, headers: mergeNoStoreHeaders() });
+      return notFound();
     }
 
-    return NextResponse.json({ error: 'unknown error' }, { status: 500, headers: mergeNoStoreHeaders() });
-  } catch (err: any) {
-    const status = typeof err?.status === 'number' ? err.status : 500;
-    return NextResponse.json(
-      { error: err?.message || 'sync put failed' },
-      { status, headers: mergeNoStoreHeaders(err?.headers) },
-    );
+    return jsonNoStore({ error: 'server_error' }, { status: 500 });
+  } catch (err: unknown) {
+    return jsonErrorFromThrowable(err, code => ({ error: code }), {
+      logLabel: 'sync:put-conversation',
+      fallbackCode: 'server_error',
+    });
   }
 }
 
@@ -196,12 +192,12 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ conversa
     );
 
     if (!bodyJson || typeof bodyJson !== 'object' || Array.isArray(bodyJson)) {
-      return badRequest('invalid body (must be object)');
+      return badRequest('invalid_body');
     }
 
     const baseRevisionParsed = parseBaseRevision((bodyJson as any).baseRevision);
     if (Number.isNaN(baseRevisionParsed as any))
-      return badRequest('invalid baseRevision (must be number or null)');
+      return badRequest('invalid_base_revision');
 
     const baseRevision = baseRevisionParsed === undefined ? null : baseRevisionParsed;
 
@@ -209,7 +205,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ conversa
 
     if (result.ok) {
       const resp: SyncDeleteConversationResponse = { conversationId, revision: result.revision };
-      return NextResponse.json(resp, { headers: mergeNoStoreHeaders() });
+      return jsonNoStore(resp);
     }
 
     if (result.kind === 'conflict') {
@@ -218,16 +214,14 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ conversa
 
     if (result.kind === 'notfound') {
       // If baseRevision is non-null and row missing, we return 404.
-      // (Alternatively could 409, but 404 makes debugging clearer.)
-      return NextResponse.json({ error: 'not found' }, { status: 404, headers: mergeNoStoreHeaders() });
+      return notFound();
     }
 
-    return NextResponse.json({ error: 'unknown error' }, { status: 500, headers: mergeNoStoreHeaders() });
-  } catch (err: any) {
-    const status = typeof err?.status === 'number' ? err.status : 500;
-    return NextResponse.json(
-      { error: err?.message || 'sync delete failed' },
-      { status, headers: mergeNoStoreHeaders(err?.headers) },
-    );
+    return jsonNoStore({ error: 'server_error' }, { status: 500 });
+  } catch (err: unknown) {
+    return jsonErrorFromThrowable(err, code => ({ error: code }), {
+      logLabel: 'sync:delete-conversation',
+      fallbackCode: 'server_error',
+    });
   }
 }

@@ -1,6 +1,6 @@
 // src/server/security/originGuard.ts
 
-import { makeHttpError } from './httpError';
+import { makeHttpError } from '~/server/http/error';
 
 export function getExpectedOriginFromNextAuthUrl(): string | null {
   const raw = process.env.NEXTAUTH_URL;
@@ -20,7 +20,7 @@ export function requireSameOriginOrThrow(req: Request): void {
   const expected = getExpectedOriginFromNextAuthUrl();
   if (!expected) {
     // Misconfiguration: we can't safely validate Origin.
-    throw makeHttpError(503, 'NEXTAUTH_URL not configured');
+    throw makeHttpError(503, 'server_misconfigured');
   }
 
   const origin = req.headers.get('origin');

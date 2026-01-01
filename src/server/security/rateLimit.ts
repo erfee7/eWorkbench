@@ -1,6 +1,6 @@
 // src/server/security/rateLimit.ts
 
-import { makeHttpError } from './httpError';
+import { makeHttpError } from '~/server/http/error';
 
 type Entry = {
   windowStart: number;

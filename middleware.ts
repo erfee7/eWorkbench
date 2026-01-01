@@ -20,23 +20,26 @@ function isBypassedPath(pathname: string): boolean {
   // NextAuth endpoints must not be gated by our auth middleware.
   if (pathname.startsWith('/api/auth/')) return true;
 
-  // Internal validator endpoint: middleware calls it; must bypass to avoid recursion.
-  if (pathname.startsWith('/api/Winternal/')) return true;
-
   // Edge backend capabilities endpoint: needed for login page to work.
   if (pathname.startsWith('/api/edge/backend.listCapabilities')) return true;
 
   return false;
 }
 
-function jsonResponse(status: number, body: any): NextResponse {
+function jsonResponse(status: number, body: any, extraHeaders?: Record<string, string>): NextResponse {
   return new NextResponse(JSON.stringify(body), {
     status,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
+      ...(extraHeaders || {}),
     },
   });
+}
+
+function apiError(status: number, code: string, extraHeaders?: Record<string, string>): NextResponse {
+  // Keep API errors machine-readable; pages handle redirects separately.
+  return jsonResponse(status, { error: code }, extraHeaders);
 }
 
 /**
@@ -90,15 +93,18 @@ export async function middleware(req: NextRequest) {
   if (isBypassedPath(pathname))
     return NextResponse.next();
 
-  const secret = process.env.NEXTAUTH_SECRET;
-  if (!secret) {
-    // Fail closed: without a secret, we cannot validate sessions.
-    return new NextResponse('NEXTAUTH_SECRET not configured', { status: 503 });
-  }
-
   const isApi = isApiPath(pathname);
   const isLoginPage = pathname === '/login';
   const isLogoutPage = pathname === '/logout';
+
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    // Fail closed: without a secret, we cannot validate sessions.
+    // For APIs return JSON; for pages plain text is fine.
+    return isApi
+      ? apiError(503, 'server_misconfigured')
+      : new NextResponse('Middleware: NEXTAUTH_SECRET not configured', { status: 503 });
+  }
 
   // 1) JWT validity (cryptographic): token exists and verifies.
   const token = await getToken({ req, secret });
@@ -140,7 +146,9 @@ export async function middleware(req: NextRequest) {
         sessionValid = false;
       } else {
         // If we cannot determine validity (DB down, etc.), fail closed with 503.
-        return new NextResponse('Service unavailable (middleware)', { status: 503 });
+        return isApi
+          ? apiError(503, 'service_unavailable')
+          : new NextResponse('Middleware: Service unavailable', { status: 503 });
       }
     }
   } else {
@@ -158,7 +166,7 @@ export async function middleware(req: NextRequest) {
   let res: NextResponse;
 
   if (mustDenyApi) {
-    res = jsonResponse(401, { error: 'unauthorized' });
+    res = apiError(401, 'unauthorized');
   } else if (mustRedirectToLogin) {
     const url = req.nextUrl.clone();
     url.pathname = '/login';

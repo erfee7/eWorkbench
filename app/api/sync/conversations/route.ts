@@ -1,9 +1,10 @@
 // app/api/sync/conversations/route.ts
 
-import { NextResponse, type NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { requireSyncAuthOrThrow } from '~/server/sync/syncAuth';
 import { listConversationMetas } from '~/server/sync/syncRepo';
 import type { SyncListConversationsResponse } from '~/server/sync/syncTypes';
+import { jsonErrorFromThrowable, jsonNoStore } from '~/server/http/routeResponses';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,17 +20,11 @@ export async function GET(req: NextRequest) {
     const items = await listConversationMetas(userId);
 
     const body: SyncListConversationsResponse = { items };
-    return NextResponse.json(body, {
-      headers: {
-        // Sync metadata should not be cached by browsers/CDNs.
-        'Cache-Control': 'no-store',
-      },
+    return jsonNoStore(body);
+  } catch (err: unknown) {
+    return jsonErrorFromThrowable(err, code => ({ error: code }), {
+      logLabel: 'sync:list-conversations',
+      fallbackCode: 'server_error',
     });
-  } catch (err: any) {
-    const status = typeof err?.status === 'number' ? err.status : 500;
-    return NextResponse.json(
-      { error: err?.message || 'sync list failed' },
-      { status, headers: { 'Cache-Control': 'no-store' } },
-    );
   }
 }
