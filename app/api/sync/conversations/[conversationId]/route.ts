@@ -19,6 +19,8 @@ import { requireRateLimitOrThrow } from '~/server/security/rateLimit';
 import { requireValidConversationIdOrThrow } from '~/server/sync/syncValidation';
 import { jsonErrorFromThrowable, jsonNoStore } from '~/server/http/routeResponses';
 
+import { publishConversationChanged } from '~/server/sync/syncNotifier';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -137,6 +139,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ conversatio
 
     if (result.ok) {
       const resp: SyncUpsertConversationResponse = { conversationId, revision: result.revision };
+
+      // Notify other clients for this user to pull updated blob.
+      // (Originating client may also receive it; it can ignore by revision.)
+      publishConversationChanged(userId, conversationId, result.revision, false);
+      
       return jsonNoStore(resp);
     }
 
@@ -205,6 +212,11 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ conversa
 
     if (result.ok) {
       const resp: SyncDeleteConversationResponse = { conversationId, revision: result.revision };
+
+      // Notify other clients for this user to pull updated blob.
+      // (Originating client may also receive it; it can ignore by revision.)
+      publishConversationChanged(userId, conversationId, result.revision, true);
+
       return jsonNoStore(resp);
     }
 
