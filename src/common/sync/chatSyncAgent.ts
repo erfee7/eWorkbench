@@ -24,6 +24,14 @@ export interface ChatSyncAgentOptions {
   traceSkips?: boolean;
 }
 
+type SyncConversationChangedEvent = {
+  type: 'conversation_changed';
+  conversationId: DConversationId;
+  revision: number;
+  deleted: boolean;
+  updatedAt?: number;
+};
+
 /**
  * Convert a SyncConversation (wire format) back into a DConversation (in-memory store format).
  *
@@ -56,6 +64,13 @@ export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => vo
   function log(...args: any[]) {
     if (debug) console.log(...args);
   }
+
+  // ---- Dedicated HTTP transport (reads + later writes once enabled) ----
+  // We keep a single instance so:
+  // - initial pull uses it
+  // - SSE-triggered pulls use it
+  // - uploader can switch to it (enabling writes)
+  const httpTransport = createChatSyncTransportHttp();
 
   // ---- Switchable transport (starts disabled, later switches to HTTP) ----
   const { transport, switchTo } = createChatSyncTransportSwitchable(createChatSyncTransportNoop());
@@ -98,6 +113,10 @@ export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => vo
 
   let stopWatcher: (() => void) | null = null;
   let unsubscribeFromHydration: (() => void) | null = null;
+
+  // ---- SSE realtime channel ----
+  let stopRealtime: (() => void) | null = null;
+
   let stopped = false;
 
   function reconcileDirtyUpsertsAfterHydration() {
@@ -155,6 +174,208 @@ export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => vo
     });
   }
 
+  function shouldSkipRemoteApply(conversationId: DConversationId, expectedRevision: number): boolean {
+    const syncState = useChatSyncStore.getState();
+
+    // If local is dirty, do not overwrite; conflicts must be resolved via 409 workflow.
+    if (syncState.dirtyOpById[conversationId]) return true;
+
+    // If we already know a same/newer revision, skip redundant fetch/apply.
+    const known = syncState.remoteRevisionById[conversationId];
+    if (typeof known === 'number' && known >= expectedRevision) return true;
+
+    return false;
+  }
+
+  async function applyRemoteDelete(conversationId: DConversationId, revision: number) {
+    if (stopped) return;
+    if (shouldSkipRemoteApply(conversationId, revision)) return;
+
+    await withConversationMuted(conversationId, async () => {
+      const existsLocally = !!useChatStore.getState().conversations.find(c => c.id === conversationId);
+      if (existsLocally) {
+        useChatStore.getState().deleteConversations([conversationId]);
+      }
+    });
+
+    useChatSyncStore.getState().setRemoteRevision(conversationId, revision);
+  }
+
+  async function applyRemoteUpsertByGet(conversationId: DConversationId, expectedRevision: number) {
+    if (stopped) return;
+    if (shouldSkipRemoteApply(conversationId, expectedRevision)) return;
+
+    // We expect the GET to reflect the event revision (single DB, single instance),
+    // but we retry briefly to avoid "event arrived before read saw commit" edge cases.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const getRes = await httpTransport.getConversation(conversationId);
+      if (!getRes.ok) {
+        log(`[sync] realtime: GET failed id=${conversationId}: ${getRes.error}`);
+        return;
+      }
+
+      const remote = getRes.value;
+
+      // Server may say deleted even if we thought it was an upsert event.
+      if (remote.deleted || !remote.data) {
+        await applyRemoteDelete(conversationId, remote.revision);
+        return;
+      }
+
+      if (remote.revision < expectedRevision && attempt === 0) {
+        // Small delay and retry once.
+        await new Promise(resolve => setTimeout(resolve, 200));
+        continue;
+      }
+
+      await withConversationMuted(conversationId, async () => {
+        useChatStore.getState().importConversation(inflateConversationFromSync(remote.data!), false);
+      });
+
+      useChatSyncStore.getState().setRemoteRevision(conversationId, remote.revision);
+      return;
+    }
+
+    // If we get here, the server kept returning an older revision.
+    // Do nothing; a later event/reconnect will repair it.
+    log(`[sync] realtime: GET returned older revision than expected id=${conversationId} expected=${expectedRevision}`);
+  }
+
+  function startRealtimeAfterInit() {
+    if (stopRealtime || stopped) return;
+
+    // Per-conversation coalescing: keep only the latest revision per id.
+    const pendingById = new Map<DConversationId, { revision: number; deleted: boolean }>();
+
+    let drainInFlight = false;
+    let drainAgain = false;
+
+    function queueEvent(e: SyncConversationChangedEvent) {
+      const prev = pendingById.get(e.conversationId);
+      if (!prev || e.revision > prev.revision) {
+        pendingById.set(e.conversationId, { revision: e.revision, deleted: e.deleted });
+      }
+
+      if (drainInFlight) {
+        drainAgain = true;
+        return;
+      }
+
+      void drainQueue();
+    }
+
+    async function drainQueue() {
+      if (drainInFlight) return;
+
+      drainInFlight = true;
+      try {
+        while (!stopped && pendingById.size) {
+          const next = pendingById.entries().next().value as [DConversationId, { revision: number; deleted: boolean }];
+          const [conversationId, meta] = next;
+          pendingById.delete(conversationId);
+
+          if (meta.deleted) {
+            await applyRemoteDelete(conversationId, meta.revision);
+          } else {
+            await applyRemoteUpsertByGet(conversationId, meta.revision);
+          }
+        }
+      } finally {
+        drainInFlight = false;
+
+        if (!stopped && drainAgain) {
+          drainAgain = false;
+          void drainQueue();
+        }
+      }
+    }
+
+    // Manual reconnect loop (more predictable than relying on EventSource auto-retry).
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let backoffMs = 1000;
+
+    function cleanupConnection() {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+
+      if (es) es.close();
+      es = null;
+    }
+
+    function scheduleReconnect() {
+      if (stopped) return;
+
+      cleanupConnection();
+
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+      }, backoffMs);
+
+      backoffMs = Math.min(30_000, backoffMs * 2);
+    }
+
+    function connect() {
+      if (stopped) return;
+
+      try {
+        // Same-origin; cookies included automatically. withCredentials=true for future proxy/cors setups.
+        es = new EventSource('/api/sync/events', { withCredentials: true });
+      } catch (err) {
+        log('[sync] realtime: failed to create EventSource', err);
+        scheduleReconnect();
+        return;
+      }
+
+      es.addEventListener('open', () => {
+        backoffMs = 1000;
+        log('[sync] realtime: connected');
+      });
+
+      es.addEventListener('conversation_changed', (evt: Event) => {
+        const msgEvt = evt as MessageEvent;
+
+        let data: any = null;
+        try {
+          data = JSON.parse(msgEvt.data);
+        } catch {
+          return;
+        }
+
+        // Validate minimally; keep this resilient.
+        if (!data || typeof data !== 'object') return;
+        if (data.type !== 'conversation_changed') return;
+        if (typeof data.conversationId !== 'string') return;
+        if (typeof data.revision !== 'number' || !Number.isFinite(data.revision) || data.revision < 0) return;
+        if (typeof data.deleted !== 'boolean') return;
+
+        queueEvent({
+          type: 'conversation_changed',
+          conversationId: data.conversationId,
+          revision: data.revision,
+          deleted: data.deleted,
+          updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : undefined,
+        });
+      });
+
+      es.addEventListener('error', () => {
+        // Errors include server closing (TTL) and network issues.
+        // We reconnect with backoff to avoid hammering when unauthorized/offline.
+        log('[sync] realtime: disconnected; scheduling reconnect');
+        scheduleReconnect();
+      });
+    }
+
+    connect();
+
+    stopRealtime = () => {
+      cleanupConnection();
+      pendingById.clear();
+      stopRealtime = null;
+    };
+  }
+
   /**
    * Initial pull:
    * - Populate remoteRevisionById (so baseRevision is correct when we enable uploads)
@@ -165,10 +386,7 @@ export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => vo
    * with withConversationMuted(id, ...) to avoid sync feedback loops.
    */
   async function initialPullAndApplyRemote() {
-    const httpTransport = createChatSyncTransportHttp();
-
     // Snapshot what we previously believed the remote revisions were.
-    // We use this to detect "server changed since last time" without needing full blobs.
     const prevRemoteRevisionById = { ...useChatSyncStore.getState().remoteRevisionById };
 
     log('[sync] initial pull: listing remote metadata...');
@@ -301,8 +519,13 @@ export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => vo
       // Remote pulls will be applied under per-conversation mute to avoid loops.
       startWatcher();
 
-      // Then do initial pull and enable HTTP transport.
-      void initialPullAndApplyRemote();
+      // Run initial pull first, then start realtime SSE notifications.
+      void (async () => {
+        await initialPullAndApplyRemote();
+
+        if (stopped) return;
+        startRealtimeAfterInit();
+      })();
     };
 
     if (persistApi?.hasHydrated?.()) {
@@ -321,6 +544,9 @@ export function startChatSyncAgent(options: ChatSyncAgentOptions = {}): () => vo
 
     if (unsubscribeFromHydration) unsubscribeFromHydration();
     unsubscribeFromHydration = null;
+
+    if (stopRealtime) stopRealtime();
+    stopRealtime = null;
 
     if (stopWatcher) stopWatcher();
     stopWatcher = null;
