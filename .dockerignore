@@ -7,6 +7,9 @@
 !src/
 !tools/
 
+!scripts/
+!middleware.ts
+
 !*.mjs
 !middleware_BASIC_AUTH.ts
 !next.config.ts
