@@ -42,6 +42,14 @@ function apiError(status: number, code: string, extraHeaders?: Record<string, st
   return jsonResponse(status, { error: code }, extraHeaders);
 }
 
+function getInternalAppOrigin(): string {
+  // Do NOT use req.nextUrl.origin here:
+  // behind HTTPS (nginx/master proxy), req.nextUrl.origin may be https://... which is
+  // not reachable from inside the web container (Next listens on plain HTTP).
+  const port = process.env.PORT || '3000';
+  return `http://127.0.0.1:${port}`;
+}
+
 /**
  * Read the short-lived cache cookie which asserts "session is valid".
  * Cookie is a small NextAuth JWT-like token (signed/encrypted via NEXTAUTH_SECRET).
@@ -122,17 +130,25 @@ export async function middleware(req: NextRequest) {
     } else {
       // Ask node runtime to confirm "user exists and is active".
       // Important: forward cookies, otherwise the validator won't see the session.
-      const url = new URL('/api/internal/validate-session', req.nextUrl.origin);
-      const r = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          cookie: req.headers.get('cookie') ?? '',
-          // Forward proxy headers (optional; useful if validator ever rate-limits by IP).
-          'x-forwarded-for': req.headers.get('x-forwarded-for') ?? '',
-          'x-real-ip': req.headers.get('x-real-ip') ?? '',
-        },
-        cache: 'no-store',
-      });
+      const url = new URL('/api/internal/validate-session', getInternalAppOrigin());
+      let r: Response;
+      try {
+        r = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            cookie: req.headers.get('cookie') ?? '',
+            // Optional; validator may ignore these, but harmless to forward.
+            'x-forwarded-for': req.headers.get('x-forwarded-for') ?? '',
+            'x-real-ip': req.headers.get('x-real-ip') ?? '',
+          },
+          cache: 'no-store',
+        });
+      } catch {
+        // Fail closed consistently if the internal validator is unreachable.
+        return isApi
+          ? apiError(503, 'service_unavailable')
+          : new NextResponse('Middleware: Service unavailable', { status: 503 });
+      }
 
       if (r.status === 200) {
         const data = await r.json().catch(() => null);
