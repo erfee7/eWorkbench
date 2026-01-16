@@ -5,16 +5,14 @@ services:
     depends_on:
       - web
     ports:
-      # Local-dev friendly: keep using http://localhost:3000
+      # Local deployment
       - "3000:80"
       - "3443:443"
 
-      # Production: map these instead (80:80 and 443:443) on the VPS.
-      # For local HTTPS testing you can map something like 3443:443,
-      # but you must also enable the HTTPS server block + mount certs.
+      # # Production (Cloud VPS, etc.)
       # - "80:80"
       # - "443:443"
-      # - "3443:443"
+
     volumes:
       # Main nginx config + vhost config.
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro,Z

@@ -62,3 +62,7 @@ next-env.d.ts
 
 # Local certificates for testing HTTPS with nginx
 /docker/nginx/certs
+
+# Docker override file
+docker-compose.override.yml
+docker-compose.override.yaml
