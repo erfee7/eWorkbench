@@ -12,9 +12,7 @@ name: Create and publish Docker images
 on:
   push:
     branches:
-      - main          # Primary branch (Big-AGI Open)
-    tags:
-      - 'v2.*'        # Stable releases (v2.0.0, v2.1.0, etc.)
+      - main
 
 env:
   REGISTRY: ghcr.io
@@ -72,10 +70,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           labels: |
-            org.opencontainers.image.title=Big-AGI Open
-            org.opencontainers.image.description=Big-AGI Open - Multi-model AI workspace for experts who need to think broader, decide smarter, and build with confidence.
+            org.opencontainers.image.title=eWorkbench
+            org.opencontainers.image.description=eWorkbench - A transparent, inspectable workbench for working with modern AI tools.
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.documentation=https://big-agi.com
 
       - name: Build and push by digest
         id: build
@@ -147,16 +144,13 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Development: main branch
-            type=raw,value=development,enable=${{ github.ref == 'refs/heads/main' }}
-
-            # Latest: v2.x releases (safe default)
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v2.') }}
-
-            # Stable: v2.x releases (alias)
-            type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v2.') }}
-
-            # Version tags (v2.0.0, 2.0.0)
+            # Every push to main updates "latest"
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+          
+            # Every push also publishes a pinned SHA tag
+            type=sha,prefix=sha-,format=long
+          
+            # Optional: if you create git tags later (v1.0.0), publish those too
             type=ref,event=tag
             type=semver,pattern={{version}}
 
@@ -165,10 +159,9 @@ jobs:
         run: |
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            --annotation='index:org.opencontainers.image.title=Big-AGI Open' \
-            --annotation='index:org.opencontainers.image.description=Big-AGI Open - Multi-model AI workspace for experts who need to think broader, decide smarter, and build with confidence.' \
+            --annotation='index:org.opencontainers.image.title=eWorkbench' \
+            --annotation='index:org.opencontainers.image.description=eWorkbench - A transparent, inspectable workbench for working with modern AI tools.' \
             --annotation='index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}' \
-            --annotation='index:org.opencontainers.image.documentation=https://big-agi.com' \
             $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}@sha256:%s ' *)
 
       - name: Inspect image

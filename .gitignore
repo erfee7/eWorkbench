@@ -59,3 +59,13 @@ next-env.d.ts
 
 # Ignore temporary CC files
 /tmpclaude*
+
+# Local certificates for testing HTTPS with nginx
+/docker/nginx/certs
+
+# Docker override file
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# Reverse proxy config
+docker/nginx/conf.d/eworkbench.conf

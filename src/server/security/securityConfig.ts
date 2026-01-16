@@ -21,7 +21,7 @@ function envBool(name: string, def: boolean): boolean {
  */
 export const securityConfig = {
   // When behind nginx, set EW_TRUST_PROXY=1 to trust X-Forwarded-For / X-Real-IP.
-  trustProxy: envBool('EW_TRUST_PROXY', false),
+  trustProxy: envBool('EW_TRUST_PROXY', true),
 
   // ---- Login brute-force throttling (Credentials authorize) ----
   loginRateLimit: {
