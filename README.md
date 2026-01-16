@@ -77,7 +77,7 @@ We are not providing a pre-built image currently, so you need to build by
 ```bash
 docker compose build
 ```
-This may take several minutes to finish depending on your machine.
+This may take several minutes to finish depending on your device and network.
 
 After the build finish, start the containers by
 ```bash
