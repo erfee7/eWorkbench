@@ -28,8 +28,8 @@ In addition, you need to install `certbot` to get a certificate later
 sudo apt install certbot
 ```
 
-## 2. Obtain the code and set config for your deployment
-Then you need to get the eWorkbench app. Currently we don't provide a pre-built image, so you need to build from source code yourself. First clone the repository by
+## 2. Set config for your deployment
+Then you need to get the eWorkbench app and make some config related to your deployment. First clone the repository by
 ```bash
 git clone https://github.com/erfee7/eWorkbench.git
 cd eWorkbench
@@ -60,9 +60,10 @@ The `docker-compose.override.yaml` file is almost ready to use. You just need to
       - /etc/letsencrypt/live/app.example.com/fullchain.pem:/etc/nginx/certs/fullchain.pem:ro
       - /etc/letsencrypt/live/app.example.com/privkey.pem:/etc/nginx/certs/privkey.pem:ro
 ```
+Also, see the comments in the file for more advanced options.
 
 ### Nginx config
-For a standard deployment, you don't need to modify `docker/nginx/conf.d/eworkbench.conf`. It is used to set some config for local development or HTTP-only mode. See the comments in that file.
+For a standard deployment, you don't need to modify `docker/nginx/conf.d/eworkbench.conf`. It is used to set some config for local development or HTTP-only mode. See the comments in the file.
 
 ## 3. Get a certificate
 You have already install `certbot` in the first step, so you can directly run
@@ -71,19 +72,18 @@ sudo certbot certonly --standalone -d app.example.com
 ```
 Again, replace `app.example.com` by the actual domain name you are using.
 
-
 ## 4. Build the app and run
-We are not providing a pre-built image currently, so you need to build by
-```bash
-docker compose build
-```
-This may take several minutes to finish depending on your device and network.
-
-After the build finish, start the containers by
+We provide a pre-built image on GHCR, so you can just pull the image to avoid building on cloud server. This is the default behavior of the project. Just run
 ```bash
 docker compose up -d
 ```
 and the service is now up.
+
+You can also build your own image from the source code. But remember this can be CPU and RAM heavy on smaller devices. First modify `docker-compose.override.yaml` (see the comments in the file), then run
+```bash
+docker compose up --build -d
+```
+This may take several minutes to finish depending on your device and network.
 
 - Upstream installation guide (for reference): https://github.com/enricoros/big-agi/blob/main/docs/installation.md
 ## 5. Update your app
@@ -121,8 +121,6 @@ eWorkbench is a fork of:
 
 **Big-AGI Open** — https://github.com/enricoros/big-agi  
 Created and maintained by **Enrico Ros** and contributors. Licensed under **MIT**.
-
-The **Sponsor** button in this repository points to the Big-AGI project to support ongoing upstream development.
 
 This fork is not affiliated with the upstream project.
 
