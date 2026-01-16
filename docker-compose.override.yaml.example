@@ -1,0 +1,19 @@
+services:
+  nginx:
+    ports:
+      # Production (Cloud VPS, etc.)
+      - "80:80"
+      - "443:443"
+      
+      # # Local deployment
+      # - "3000:80"
+      # - "3443:443"
+
+    volumes:
+      # Mount certs from host
+      # Replace app.example.com with your actual domain
+      - /etc/letsencrypt/live/app.example.com/fullchain.pem:/etc/nginx/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/app.example.com/privkey.pem:/etc/nginx/certs/privkey.pem:ro
+
+      # # Local testing certs (self-signed)
+      # - ./docker/nginx/certs:/etc/nginx/certs:ro,Z

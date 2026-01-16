@@ -6,7 +6,7 @@ A transparent, inspectable workbench for working with modern **AI** tools — bu
 
 </div>
 
-## Status
+# Status
 
 Early-stage fork. For now, eWorkbench tracks upstream closely while experimenting with changes that may diverge long-term.
 
@@ -14,34 +14,90 @@ Current features: basic account system (username + password); chat message sync 
 
 Planned ideas: real time sync, VPS setup structure, additional QoL features.
 
-## Get Started
+# Get Started
 
-At the moment, we support a local docker deployment. First clone the repository by
+This project is mainly designed for account system with chat sync. Thus it's only reasonable to be deployed on cloud and accessed through public internet. If you simply need a local development, it's recommended to directly use the upstream project.
 
+## 1. Prepare environment
+To start with, you need to prepare some basic dependencies. We recommend to follow the Part I of this nice document from LibreChat project: https://www.librechat.ai/docs/remote/docker_linux
+
+Notice that this guide is designed for an Ubuntu server. You may need to modify some commands if you are using other distributions.
+
+In addition, you need to install `certbot` to get a certificate later
+```bash
+sudo apt install certbot
 ```
+
+## 2. Obtain the code and set config for your deployment
+Then you need to get the eWorkbench app. Currently we don't provide a pre-built image, so you need to build from source code yourself. First clone the repository by
+```bash
 git clone https://github.com/erfee7/eWorkbench.git
 cd eWorkbench
 ```
 
-We are not providing a pre-built image currently, so you need to build by
+Before building, copy these two example config files
+```bash
+cp .env.example .env
+cp docker-compose.override.yaml.example docker-compose.override.yaml
+cp docker/nginx/conf.d/eworkbench.conf.example docker/nginx/conf.d/eworkbench.conf
 ```
+Then add per-deployment config properly.
+
+### Environment variables
+The `.env` file has two parts. The first part is the env from upstream. You can set according to your needs following the upstream guide: https://github.com/enricoros/big-AGI/blob/main/docs/environment-variables.md
+
+The second part is eWorkbench-specific. The only essential setting is `NEXTAUTH_URL` and `NEXTAUTH_SECRET`. The url should be exactly the same as the public url where you are exposing the service. The secret should be some strong random string. You can use
+```bash
+openssl rand -base64 32
+```
+to generate one for yourself.
+
+The rest of the env are not mandatory, and we are providing the default values here for your reference. You can just remove them or keep them unchanged if you don't understand their meanings.
+
+### Docker override
+The `docker-compose.override.yaml` file is almost ready to use. You just need to change `app.example.com` into the actual domain name you are using in the two volume mounts
+```yaml
+      - /etc/letsencrypt/live/app.example.com/fullchain.pem:/etc/nginx/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/app.example.com/privkey.pem:/etc/nginx/certs/privkey.pem:ro
+```
+
+### Nginx config
+For a standard deployment, you don't need to modify `docker/nginx/conf.d/eworkbench.conf`. It is used to set some config for local development or HTTP-only mode. See the comments in that file.
+
+## 3. Get a certificate
+You have already install `certbot` in the first step, so you can directly run
+```bash
+sudo certbot certonly --standalone -d app.example.com
+```
+Again, replace `app.example.com` by the actual domain name you are using.
+
+
+## 4. Build the app and run
+We are not providing a pre-built image currently, so you need to build by
+```bash
 docker compose build
 ```
+This may take several minutes to finish depending on your machine.
 
 After the build finish, start the containers by
+```bash
+docker compose up -d
 ```
-docker compose up
-```
-and the service is up at `http://localhost:3000`.
-
-Or you can use a shortcut for build and deploy
-```
-docker compose up -d --build
-```
+and the service is now up.
 
 - Upstream installation guide (for reference): https://github.com/enricoros/big-agi/blob/main/docs/installation.md
+## 5. Update your app
+This project has no big update plans for now, so don't expect many new features coming. But we will keep regular updates following the upstream. So you still need to update the code to get the new things from upstream.
 
-## Data Ownership
+Since our config above only involves some files ignored by `git`, you can update simply by
+```bash
+docker compose down
+git pull
+docker compose build
+docker compose up -d
+```
+
+# Data Ownership
 
 While the upstream big-AGI Open stores chat history only in the local IndexedDB, eWorkbench adds a sync feature and stores chat history also in a PostgresDB container on the server. Please be aware of such structural changes and you are trusting the server for your chat history data. 
 
@@ -49,17 +105,17 @@ The current version has a simple account system (username + password only), and 
 
 - Upstream data ownership guide (for reference): https://github.com/enricoros/big-AGI/blob/main/docs/help-data-ownership.md
 
-## Account Managing
+# Account Managing
 
 Currently, the account system in eWorkbench is rather simple. Users can log in only by username and password. This account system is mainly designed for deployment security (only authorized client can use the service) and chat history separation. 
 
 We don't have any open registration function now. The accounts are managed by `scripts/accounts.js`. In the default deployment in docker, run
-```
+```bash
 docker compose exec -it web node scripts/accounts.js --help
 ```
 to see the usage of this script.
 
-## Attribution
+# Attribution
 
 eWorkbench is a fork of:
 
@@ -70,7 +126,7 @@ The **Sponsor** button in this repository points to the Big-AGI project to suppo
 
 This fork is not affiliated with the upstream project.
 
-## License
+# License
 
 MIT License · [Third-Party Notices](src/modules/3rdparty/THIRD_PARTY_NOTICES.md) (same as upstream)
 
