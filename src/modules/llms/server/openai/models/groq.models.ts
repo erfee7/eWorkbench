@@ -1,15 +1,20 @@
 import { LLM_IF_OAI_Chat, LLM_IF_OAI_Fn } from '~/common/stores/llms/llms.types';
+import { Release } from '~/common/app.release';
 
 import type { ModelDescriptionSchema } from '../../llm.server.types';
-import { fromManualMapping, ManualMappings } from '../../models.mappings';
+import { fromManualMapping, llmDevCheckModels_DEV, ManualMappings } from '../../models.mappings';
 import { wireGroqModelsListOutputSchema } from '../wiretypes/groq.wiretypes';
+
+
+// dev options
+const DEV_DEBUG_GROQ_MODELS = Release.IsNodeDevBuild; // not in staging to reduce noise
 
 
 /**
  * Groq models.
  * - models list: https://console.groq.com/docs/models
  * - pricing: https://groq.com/pricing/
- * - updated: 2026-01-14
+ * - updated: 2026-02-18
  */
 const _knownGroqModels: ManualMappings = [
 
@@ -54,17 +59,10 @@ const _knownGroqModels: ManualMappings = [
     interfaces: [LLM_IF_OAI_Chat, LLM_IF_OAI_Fn],
     chatPrice: { input: 1.00, output: 3.00 },
   },
-  {
-    isLegacy: true,
-    idPrefix: 'moonshotai/kimi-k2-instruct',
-    label: 'Kimi K2 Instruct (Deprecated)',
-    description: 'Deprecated on 2025-10-10, redirects to kimi-k2-instruct-0905.',
-    contextWindow: 131072,
-    maxCompletionTokens: 16384,
-    interfaces: [LLM_IF_OAI_Chat, LLM_IF_OAI_Fn],
-    chatPrice: { input: 1.00, output: 3.00 },
-    hidden: true,
-  },
+  // REMOVED MODELS (no longer returned by API):
+  // - (Jan 21, 2026) qwen-qwq-32b, qwen-2.5-32b, qwen-2.5-coder-32b
+  // - (Jan 21, 2026) deepseek-r1-distill-llama-70b, deepseek-r1-distill-qwen-32b
+  // - (Feb 18, 2026) moonshotai/kimi-k2-instruct (deprecated redirect, removed from docs)
 
 
   // Production Models - Compound Systems (pass-through pricing to underlying models)
@@ -98,8 +96,9 @@ const _knownGroqModels: ManualMappings = [
     chatPrice: { input: 0.15, output: 0.60 },
   },
   {
+    isPreview: true,
     idPrefix: 'openai/gpt-oss-safeguard-20b',
-    label: 'GPT OSS Safeguard 20B',
+    label: 'GPT OSS Safeguard 20B (Preview)',
     description: 'OpenAI safety classification model (20B MoE). Purpose-built for content moderation with Harmony response format. 131K context, 65K max output. ~1000 t/s on Groq.',
     contextWindow: 131072,
     maxCompletionTokens: 65536,
@@ -116,27 +115,8 @@ const _knownGroqModels: ManualMappings = [
     chatPrice: { input: 0.075, output: 0.30 },
   },
 
-  // Production Models - SDAIA
-  {
-    idPrefix: 'allam-2-7b',
-    label: 'ALLaM 2 · 7B',
-    description: 'SDAIA bilingual Arabic-English model (7B params). Trained on 4T English + 1.2T Arabic/English tokens. 4K context. ~1800 t/s on Groq.',
-    contextWindow: 4096,
-    maxCompletionTokens: 4096,
-    interfaces: [LLM_IF_OAI_Chat, LLM_IF_OAI_Fn],
-    hidden: true, // Pricing pending
-  },
-
   // Production Models - Meta
-  {
-    idPrefix: 'meta-llama/llama-guard-4-12b',
-    label: 'Llama Guard 4 · 12B',
-    description: 'Meta multimodal content moderation (12B params). Classifies text and images. 131K context, 1K max output. ~1200 t/s on Groq.',
-    contextWindow: 131072,
-    maxCompletionTokens: 1024,
-    interfaces: [LLM_IF_OAI_Chat, LLM_IF_OAI_Fn],
-    chatPrice: { input: 0.20, output: 0.20 },
-  },
+  // (Feb 18, 2026) meta-llama/llama-guard-4-12b removed from docs
   {
     idPrefix: 'llama-3.3-70b-versatile',
     label: 'Llama 3.3 · 70B Versatile',
@@ -155,6 +135,8 @@ const _knownGroqModels: ManualMappings = [
     interfaces: [LLM_IF_OAI_Chat, LLM_IF_OAI_Fn],
     chatPrice: { input: 0.05, output: 0.08 },
   },
+
+  // (Feb 18, 2026) allam-2-7b (SDAIA) removed from docs and pricing
 
 ];
 
@@ -198,6 +180,13 @@ export function groqModelToModelDescription(_model: unknown): ModelDescriptionSc
 
   return description;
 }
+
+export function groqValidateModelDefs_DEV(apiModelIds: string[]): void {
+  if (DEV_DEBUG_GROQ_MODELS) {
+    llmDevCheckModels_DEV('Groq', apiModelIds, _knownGroqModels.map(m => m.idPrefix), { checkUnknown: false });
+  }
+}
+
 
 export function groqModelSortFn(a: ModelDescriptionSchema, b: ModelDescriptionSchema): number {
   // sort hidden at the end
